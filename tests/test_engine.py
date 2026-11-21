@@ -100,6 +100,29 @@ class Geometry(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "^names must be letters only$"):
             e.Board(NAMES[:-1] + ["R2D2"], SHAPE)
 
+    def test_a_name_that_is_not_text_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "^names must be letters only$"):
+            e.Board(NAMES[:-1] + [None], SHAPE)
+
+    def test_a_shape_is_four_positive_whole_numbers(self):
+        with self.assertRaisesRegex(ValueError, r"^shape must be four positive whole numbers "
+                                                r"\(chapters, pages, lines, names per line\), got \(-1, -2, 2, 3\)$"):
+            e.Board(NAMES, (-1, -2, 2, 3))            # the sizes still multiply to twelve
+        for shape, names in (((0, 2, 2, 3), []), ((1, 2, 2), NAMES[:4]), ((1, 2, 2, 3, 1), NAMES),
+                             ((1.0, 2, 2, 3), NAMES), (("1", "2", "2", "3"), NAMES)):
+            with self.assertRaisesRegex(ValueError, "^shape must be four positive whole numbers", msg=shape):
+                e.Board(names, shape)
+
+    def test_names_and_shape_may_each_be_read_only_once(self):
+        board = e.Board(iter(NAMES), iter(SHAPE))
+        self.assertEqual((list(board.names), board.shape), (NAMES, SHAPE))
+        again, _ = e.case_from_json(e.case_to_json(board, CASE))
+        self.assertEqual((again.names, again.shape), (board.names, board.shape))
+
+    def test_a_boards_names_cannot_be_edited_in_place(self):
+        for held in (self.b.names, self.b.upper, self.b.where):
+            self.assertIsInstance(held, tuple)
+
     def test_near_reaches_one_line_up_or_down_and_no_further(self):
         #   Ann Bob Cat
         #   Dan Eve Fay
@@ -188,8 +211,20 @@ class Semantics(unittest.TestCase):
         self.assertEqual(set(rules), expected)
         self.assertEqual(len(rules), 96)          # and nothing comes out twice
 
+    def test_a_rule_is_for_or_against_and_nothing_else(self):
+        for positive in (None, "false", 0, 1, 2):
+            with self.assertRaises(ValueError) as refused:
+                e.Rule("page", "begins", "L", positive)
+            self.assertEqual(str(refused.exception), f"positive must be True or False, got {positive!r}")
+
+    def test_a_value_that_is_not_text_is_refused(self):
+        for value in (5, None, ["L", "M"]):
+            with self.assertRaises(ValueError) as refused:
+                e.Rule("page", "contains", value)
+            self.assertEqual(str(refused.exception), f"value must be letters, got {value!r}")
+
     def test_an_unknown_match_is_refused_by_matches_too(self):
-        with self.assertRaisesRegex(ValueError, "^rhymes$"):
+        with self.assertRaisesRegex(ValueError, "^unknown match 'rhymes'$"):
             e.matches("rhymes", "A", "AMBER")
 
 
@@ -322,6 +357,45 @@ class WholeCase(unittest.TestCase):
         self.assertEqual((list(board.names), board.shape), (["Ann", "Bob"], (1, 1, 1, 2)))
         self.assertEqual(rules, [e.Rule("name", "begins", "B", True)])
         self.assertEqual(who(board, e.survivors(rules, board)), ["Bob"])
+
+    def test_rules_may_arrive_one_at_a_time(self):
+        # A generator can be walked only once. The answer must not depend on that.
+        self.assertEqual(e.survivors(iter(CASE), self.b), e.survivors(CASE, self.b))
+        self.assertEqual(e.audit(iter(CASE), self.b), e.audit(CASE, self.b))
+        self.assertEqual(e.decoys(iter(CASE), self.b, 1), e.decoys(CASE, self.b, 1))
+
+    def test_a_saved_rule_has_four_parts(self):
+        for item in (["name", "is", "Michael"], ["name", "is", "Michael", False, "extra"], None, "name"):
+            with self.assertRaises(ValueError) as refused:
+                e.Rule.from_list(item)
+            self.assertEqual(str(refused.exception),
+                             f"a saved rule is [scope, match, value, positive], got {item!r}")
+
+    def test_a_broken_saved_case_is_refused(self):
+        good = json.loads(e.case_to_json(self.b, CASE))
+        saved = lambda **changes: json.dumps({**good, **changes})
+        no_case = "^a saved case is a JSON object with shape, names and rules$"
+        no_list = "^the shape, names and rules of a saved case must each be a list$"
+        broken = {
+            "this is not JSON": "^a saved case must be JSON: ",
+            "[]": no_case, "null": no_case, "42": no_case,
+            json.dumps({"shape": good["shape"], "names": good["names"]}): no_case,
+            saved(rules=None): no_list, saved(shape=12): no_list, saved(names="Michael"): no_list,
+            saved(shape=[-1, -2, 2, 3]): "^shape must be four positive whole numbers",
+            saved(names=good["names"][:-1] + [None]): "^names must be letters only$",
+            saved(rules=[["name", "is", "Michael"]]): "^a saved rule is ",
+            saved(rules=[["page", "begins", "L", "false"]]): "^positive must be True or False, got 'false'$",
+            saved(rules=[["page", "begins", 5, True]]): "^value must be letters, got 5$",
+            saved(rules=[["street", "begins", "L", True]]): "^unknown scope 'street'$",
+        }
+        for text, message in broken.items():
+            with self.assertRaisesRegex(ValueError, message, msg=text[:70]):
+                e.case_from_json(text)
+
+    def test_a_saved_case_may_carry_other_keys(self):
+        good = json.loads(e.case_to_json(self.b, CASE))
+        board, rules = e.case_from_json(json.dumps({**good, "killer": "Maxwell", "note": "for Tuesday"}))
+        self.assertEqual((list(board.names), rules), (NAMES, CASE))
 
     def test_a_case_survives_a_round_trip_through_json(self):
         board, rules = e.case_from_json(e.case_to_json(self.b, CASE))
@@ -470,7 +544,9 @@ class Wording(unittest.TestCase):
                 continue                          # refused: it would name the killer outright
             text = wording.sentence(rule, RIDDLE)
             self.assertTrue(text.endswith(".") and text[0].isupper())
-            self.assertNotIn(text, seen)          # no two rules read the same
+            self.assertNotIn(text, seen)          # no two rules read the same, while only one
+            #                                       person is named: every "name is X, negative"
+            #                                       rule prints as the note
             seen.add(text)
 
     def test_the_riddle_table_is_clean(self):

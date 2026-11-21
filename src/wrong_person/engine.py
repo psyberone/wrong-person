@@ -46,39 +46,52 @@ class Rule:
             raise ValueError(f"unknown scope {self.scope!r}")
         if self.match not in MATCHES:
             raise ValueError(f"unknown match {self.match!r}")
-        if not self.value or not self.value.isalpha():
+        if not isinstance(self.value, str) or not self.value.isalpha():
             raise ValueError(f"value must be letters, got {self.value!r}")
         if self.match != "is" and len(set(self.value.upper())) != len(self.value):
             raise ValueError(f"letter set repeats a letter: {self.value!r}")
+        if not isinstance(self.positive, bool):
+            raise ValueError(f"positive must be True or False, got {self.positive!r}")
 
     def to_list(self):
         return [self.scope, self.match, self.value, self.positive]
 
     @classmethod
     def from_list(cls, item):
+        """A rule as to_list wrote it: [scope, match, value, positive], all four."""
+        if not isinstance(item, (list, tuple)) or len(item) != 4:
+            raise ValueError(f"a saved rule is [scope, match, value, positive], got {item!r}")
         return cls(*item)
 
 
 class Board:
-    """Names in reading order, plus who is in each scope of each suspect."""
+    """Names in reading order, plus who is in each scope of each suspect.
+
+    shape is (chapters, pages in a chapter, lines on a page, names on a line).
+    A board is fixed once built: its names, its shape and its tables are tuples.
+    """
 
     def __init__(self, names, shape):
+        names, shape = tuple(names), tuple(shape)
+        if len(shape) != 4 or not all(isinstance(size, int) and size > 0 for size in shape):
+            raise ValueError("shape must be four positive whole numbers "
+                             f"(chapters, pages, lines, names per line), got {shape!r}")
         chapters, pages, lines, per_line = shape
         if len(names) != chapters * pages * lines * per_line:
             raise ValueError(f"shape {shape} needs {chapters * pages * lines * per_line} "
                              f"names, got {len(names)}")
-        self.names = list(names)
-        self.shape = tuple(shape)
-        self.upper = [n.upper() for n in names]
+        if not all(isinstance(name, str) and name.isalpha() for name in names):
+            raise ValueError("names must be letters only")
+        self.names = names
+        self.shape = shape
+        self.upper = tuple(name.upper() for name in names)
         if len(set(self.upper)) != len(names):
             raise ValueError("names on a board must be unique")
-        if not all(n.isalpha() for n in names):
-            raise ValueError("names must be letters only")
 
         # index -> (chapter, page within chapter, line within page, column)
-        self.where = [(c, p, ln, col)
-                      for c in range(chapters) for p in range(pages)
-                      for ln in range(lines) for col in range(per_line)]
+        self.where = tuple((c, p, ln, col)
+                           for c in range(chapters) for p in range(pages)
+                           for ln in range(lines) for col in range(per_line))
         n = len(names)
         scopes = {scope: [[] for _ in range(n)] for scope in SCOPES}
         for i, (c, p, ln, col) in enumerate(self.where):
@@ -120,7 +133,7 @@ def matches(match, value, name):
         return name[0] in value
     if match == "ends":
         return name[-1] in value
-    raise ValueError(match)
+    raise ValueError(f"unknown match {match!r}")
 
 
 def holds(rule, board, i):
@@ -132,6 +145,7 @@ def holds(rule, board, i):
 
 def survivors(rules, board):
     """Every suspect who satisfies all the rules, in board order."""
+    rules = list(rules)             # a generator would be used up on the first suspect
     return [i for i in range(len(board)) if all(holds(r, board, i) for r in rules)]
 
 
@@ -166,10 +180,15 @@ def decoys(rules, board, killer):
 
 
 def rule_space(board, letter_sets, named=()):
-    """Every rule that can be asked of this board: the whole clue vocabulary.
+    """The clue vocabulary: every place and match for each letter set, and an "is"
+    rule for each name in `named`, each of them both ways.
 
     letter_sets  e.g. ["A", ..., "Z", "HELP", "CLUE"]
     named        names that may be referred to directly (those with a riddle)
+
+    `board` is not read: the vocabulary is the same for every board, and a name
+    in `named` is not checked against it. The space includes Rule("name", "is",
+    X, True), which wording.sentence refuses to print.
     """
     for scope in SCOPES:
         for match in ("contains", "begins", "ends"):
@@ -184,10 +203,25 @@ def rule_space(board, letter_sets, named=()):
 # ---- cases as data ---------------------------------------------------------
 
 def case_to_json(board, rules):
-    return json.dumps({"shape": list(board.shape), "names": board.names,
+    """A case as JSON text: an object with shape, names and rules, each a list.
+    A rule is saved as [scope, match, value, positive]."""
+    return json.dumps({"shape": list(board.shape), "names": list(board.names),
                        "rules": [r.to_list() for r in rules]}, indent=1)
 
 
 def case_from_json(text):
-    data = json.loads(text)
-    return Board(data["names"], data["shape"]), [Rule.from_list(r) for r in data["rules"]]
+    """Read a case that case_to_json wrote -> (Board, [Rule, ...]).
+
+    Other keys in the object are left alone. Text that is not a case, or holds
+    a board or a rule that would be refused anyway, is refused with a ValueError.
+    """
+    try:
+        data = json.loads(text)
+    except ValueError as error:
+        raise ValueError(f"a saved case must be JSON: {error}") from error
+    parts = ("shape", "names", "rules")
+    if not isinstance(data, dict) or not all(part in data for part in parts):
+        raise ValueError("a saved case is a JSON object with shape, names and rules")
+    if not all(isinstance(data[part], list) for part in parts):
+        raise ValueError("the shape, names and rules of a saved case must each be a list")
+    return Board(data["names"], data["shape"]), [Rule.from_list(rule) for rule in data["rules"]]
