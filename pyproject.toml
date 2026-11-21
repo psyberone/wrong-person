@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wrong-person"
+version = "0.1.0"
+description = "You've Got the Wrong Person! A mystery puzzle generator"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "wrong_person contributors" }]
+dependencies = []
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+wrong_person = ["riddles.json"]
+
+[tool.coverage.run]
+branch = true
+source = ["wrong_person"]
+
+[tool.coverage.report]
+fail_under = 85
+precision = 1
+show_missing = true
+
+# Development tools only; the package itself needs nothing but the standard library.
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.mutmut]
+paths_to_mutate = ["src/"]
+tests_dir = ["tests/"]
+also_copy = ["README.md"]   # tests/test_readme.py runs the README's example

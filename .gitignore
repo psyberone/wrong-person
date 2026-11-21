@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+
+# Test and review tools
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+mutants/
+.panopticon/
+panopticon.yml.draft
+
+# macOS
+.DS_Store
+
+# Local working files that sit beside the code but are not part of the project:
+# assistant instructions, design notes, work plans, research data, throwaway
+# trials and old prototypes.
+/.claude/
+/CLAUDE.md
+/HANDOFF.md
+/legacy/
+/plans/
+/riddle-research/
+/spike/
