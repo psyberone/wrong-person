@@ -54,6 +54,8 @@ dropped without letting someone else through.
 
 ## Try it
 
+Save this as `example.py` in the repository root:
+
 ```python
 from wrong_person import engine, wording
 
@@ -79,6 +81,8 @@ print(wording.sentence(last))
 report = engine.audit(clues + [last], board)
 print(report.sound, board.names[report.killer])
 ```
+
+Then run it:
 
 ```console
 $ PYTHONPATH=src python3 example.py
@@ -106,6 +110,11 @@ Branch-aware coverage, which must stay at or above 85%:
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m coverage run -m unittest discover -s tests
 python3 -m coverage report
 ```
+
+The tests need nothing but Python. The coverage commands need the `coverage`
+package, which is not part of the standard library:
+`python3 -m pip install "coverage[toml]"`. The `toml` extra matters only on
+Python 3.10.
 
 ## Licence
 

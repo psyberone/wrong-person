@@ -8,6 +8,10 @@ dist/
 
 # Test and review tools
 .coverage
+.coverage.*
+coverage.xml
+coverage.json
+htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -18,12 +22,16 @@ panopticon.yml.draft
 # macOS
 .DS_Store
 
+# Secrets and machine settings
+.env
+.env.*
+
 # Local working files that sit beside the code but are not part of the project:
 # assistant instructions, design notes, work plans, research data, throwaway
 # trials and old prototypes.
 /.claude/
-/CLAUDE.md
-/HANDOFF.md
+CLAUDE*.md
+HANDOFF*
 /legacy/
 /plans/
 /riddle-research/
