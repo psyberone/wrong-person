@@ -1,4 +1,5 @@
 """Run from the repository root:  PYTHONPATH=src python3 -m unittest discover -s tests -v"""
+import dataclasses
 import json
 import os
 import random
@@ -28,6 +29,7 @@ CASE = [
     e.Rule("name", "is", "Michael", False),    # the decoy falls
 ]
 RIDDLE = "the singer of Thriller"              # how Michael is named on a page
+SRC = str(Path(wording.__file__).parents[1])   # so a child process can import the package
 
 
 def who(board, indices):
@@ -55,8 +57,38 @@ class Geometry(unittest.TestCase):
         self.assertEqual(self.cells("near", "Michael"), ["Maxwell", "Carrie", "Edith"])
 
     def test_neighbours_never_cross_a_page(self):
-        self.assertNotIn("Linda", self.cells("next_to", "Amber"))
-        self.assertNotIn("Linda", self.cells("near", "Amber"))
+        # Amber ends a line of page 1. Simon and Dennis sit level with her on page 2.
+        self.assertEqual(self.cells("next_to", "Amber"), ["Maxwell"])
+        self.assertEqual(self.cells("near", "Amber"), ["Maxwell", "Edith", "Oscar"])
+
+    def test_chapters_are_separate(self):
+        #   CHAPTER 1          CHAPTER 2
+        #   Ann  Bob  Cat      Dan  Eve  Fay
+        two = e.Board("Ann Bob Cat Dan Eve Fay".split(), (2, 1, 1, 3))
+        cells = lambda scope, name: who(two, two.cells(scope, two.index(name)))
+        self.assertEqual(cells("chapter", "Cat"), ["Ann", "Bob", "Cat"])
+        self.assertEqual(cells("page", "Dan"), ["Dan", "Eve", "Fay"])
+        self.assertEqual(cells("line", "Cat"), ["Ann", "Bob", "Cat"])
+        self.assertEqual(cells("next_to", "Ann"), ["Bob"])
+        self.assertEqual(cells("near", "Cat"), ["Bob"])
+
+    def test_a_board_knows_how_many_names_it_holds(self):
+        self.assertEqual(len(self.b), 12)
+
+    def test_a_name_is_found_whatever_its_case(self):
+        self.assertEqual(self.b.index("ruth"), 11)
+        self.assertEqual(self.b.index("MICHAEL"), 0)
+
+    def test_a_board_keeps_its_own_copy_of_the_names(self):
+        names = list(NAMES)
+        board = e.Board(names, SHAPE)
+        names[0] = "Zed"
+        self.assertEqual(board.names[0], "Michael")
+        self.assertEqual(board.index("Michael"), 0)
+
+    def test_the_names_a_rule_looks_at_cannot_be_edited(self):
+        for scope in e.SCOPES:
+            self.assertIsInstance(self.b.cells(scope, 0), tuple, scope)
 
     def test_bad_boards_are_refused(self):
         with self.assertRaisesRegex(ValueError, r"^shape \(1, 2, 2, 3\) needs 12 names, got 11$"):
@@ -108,6 +140,16 @@ class Semantics(unittest.TestCase):
         self.assertFalse(self.holds("Simon", "name", "begins", "HELP", True))
         self.assertTrue(self.holds("Ruth", "name", "ends", "HELP", True))
 
+    def test_a_letter_list_means_any_one_for_contains_too(self):
+        # No name has both an X and a K; Maxwell has the X and Jack has the K.
+        rule = e.Rule("name", "contains", "XK")
+        self.assertEqual(who(self.b, e.survivors([rule], self.b)), ["Maxwell", "Jack"])
+
+    def test_is_means_the_whole_name(self):
+        board = e.Board("Fred Freddie Bert Albert".split(), (1, 1, 2, 2))
+        self.assertEqual(who(board, e.survivors([e.Rule("name", "is", "Fred")], board)), ["Fred"])
+        self.assertEqual(who(board, e.survivors([e.Rule("name", "is", "Bert")], board)), ["Bert"])
+
     def test_case_does_not_matter(self):
         self.assertTrue(self.holds("Amber", "name", "contains", "a", True))
         self.assertTrue(self.holds("Maxwell", "next_to", "is", "MICHAEL", True))
@@ -123,6 +165,28 @@ class Semantics(unittest.TestCase):
                     ("page", "contains", ""), ("page", "contains", "AA"), ("page", "contains", "A1")]:
             with self.assertRaises(ValueError):
                 e.Rule(*bad)
+
+    def test_a_letter_may_not_repeat_in_another_case(self):
+        with self.assertRaisesRegex(ValueError, "^letter set repeats a letter: 'Aa'$"):
+            e.Rule("page", "contains", "Aa")
+
+    def test_a_rule_cannot_be_changed_once_made(self):
+        rule = e.Rule("page", "begins", "L", False)
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            rule.positive = True
+        self.assertEqual(len({rule, e.Rule("page", "begins", "L", False)}), 1)   # and can sit in a set
+
+    def test_the_rule_space_is_the_whole_vocabulary(self):
+        rules = list(e.rule_space(self.b, ["A", "HELP"], ["Michael", "Carrie"]))
+        expected = {e.Rule(scope, match, value, positive)
+                    for scope in ("name", "line", "page", "chapter", "next_to", "near")
+                    for match, values in (("contains", ("A", "HELP")), ("begins", ("A", "HELP")),
+                                          ("ends", ("A", "HELP")), ("is", ("Michael", "Carrie")))
+                    for value in values
+                    for positive in (True, False)}
+        self.assertEqual(len(expected), 96)       # 6 places x 4 matches x 2 values x 2 ways
+        self.assertEqual(set(rules), expected)
+        self.assertEqual(len(rules), 96)          # and nothing comes out twice
 
     def test_an_unknown_match_is_refused_by_matches_too(self):
         with self.assertRaisesRegex(ValueError, "^rhymes$"):
@@ -164,11 +228,23 @@ class Properties(unittest.TestCase):
                     verdicts = {e.holds(rule, board, j) for j in board.cells(scope, i)}
                     self.assertEqual(len(verdicts), 1)
 
-    def test_same_inputs_same_answer(self):
-        for board, _ in self.boards():
-            rules = [e.Rule("page", "contains", "Z"), e.Rule("near", "ends", "A", False)]
-            again = e.Board(list(board.names), board.shape)
-            self.assertEqual(e.survivors(rules, board), e.survivors(rules, again))
+    def test_same_inputs_same_answer_in_every_run(self):
+        # Python walks a set of words in a different order from one run to the next
+        # (PYTHONHASHSEED), so code that leaned on a set's order would change its answer.
+        script = ("from wrong_person import engine as e\n"
+                  "names = 'Michael Maxwell Amber Carrie Edith Oscar Linda Simon Dennis Holly Jack Ruth'.split()\n"
+                  "board = e.Board(names, (1, 2, 2, 3))\n"
+                  "rules = list(e.rule_space(board, ['A', 'HELP'], ['Michael']))\n"
+                  "print([r.to_list() for r in rules])\n"
+                  "print([e.survivors([r], board) for r in rules])\n"
+                  "print(e.audit(rules[:5], board), e.case_to_json(board, rules[:3]))\n")
+        runs = set()
+        for seed in ("1", "2", "3"):
+            run = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=60,
+                                 env={**os.environ, "PYTHONPATH": SRC, "PYTHONHASHSEED": seed})
+            self.assertEqual(run.returncode, 0, run.stderr)
+            runs.add(run.stdout)
+        self.assertEqual(len(runs), 1)
 
 
 class WholeCase(unittest.TestCase):
@@ -206,6 +282,17 @@ class WholeCase(unittest.TestCase):
         padded = CASE[:1] + [e.Rule("chapter", "contains", "A")] + CASE[1:]
         self.assertEqual(e.audit(padded, self.b).redundant, (1,))
 
+    def test_audit_catches_a_wasted_first_clue(self):
+        report = e.audit([e.Rule("chapter", "contains", "A")] + CASE, self.b)
+        self.assertEqual(report.redundant, (0,))
+        self.assertFalse(report.sound)
+
+    def test_the_last_name_on_the_board_can_be_the_answer(self):
+        self.assertEqual(who(self.b, e.survivors([e.Rule("name", "begins", "R")], self.b)), ["Ruth"])
+        report = e.audit([e.Rule("name", "begins", "R")], self.b)
+        self.assertTrue(report.sound)
+        self.assertEqual(self.b.names[report.killer], "Ruth")
+
     def test_audit_catches_more_than_one_answer(self):
         report = e.audit(CASE[:-1], self.b)
         self.assertFalse(report.sound)
@@ -216,6 +303,25 @@ class WholeCase(unittest.TestCase):
         report = e.audit(CASE + [e.Rule("name", "is", "Maxwell", False)], self.b)
         self.assertEqual(report.survivors, ())
         self.assertFalse(report.sound)
+        self.assertIsNone(report.killer)
+
+    def test_an_audit_cannot_be_changed_once_made(self):
+        report = e.audit(CASE[:-1], self.b)
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            report.survivors = (1,)
+
+    def test_a_saved_case_has_a_fixed_form(self):
+        saved = json.loads(e.case_to_json(self.b, CASE[:2]))
+        self.assertEqual(saved, {"shape": [1, 2, 2, 3], "names": NAMES,
+                                 "rules": [["page", "begins", "L", False],
+                                           ["next_to", "contains", "A", True]]})
+
+    def test_a_case_written_by_hand_is_read(self):
+        board, rules = e.case_from_json(
+            '{"shape": [1, 1, 1, 2], "names": ["Ann", "Bob"], "rules": [["name", "begins", "B", true]]}')
+        self.assertEqual((list(board.names), board.shape), (["Ann", "Bob"], (1, 1, 1, 2)))
+        self.assertEqual(rules, [e.Rule("name", "begins", "B", True)])
+        self.assertEqual(who(board, e.survivors(rules, board)), ["Bob"])
 
     def test_a_case_survives_a_round_trip_through_json(self):
         board, rules = e.case_from_json(e.case_to_json(self.b, CASE))
@@ -239,6 +345,55 @@ class Wording(unittest.TestCase):
                          "The singer of Thriller is next to the killer.")
         self.assertEqual(say(e.Rule("chapter", "ends", "D")),
                          "There is a name ending in D in the killer's chapter.")
+
+    def test_every_letter_clue_reads_as_its_rule_means(self):
+        # All 36: six places, three matches, both ways. Two sentences swapped would
+        # still be two different sentences, so each one is written out.
+        expected = {
+            ("name", "contains", True): "The killer's name contains E.",
+            ("name", "contains", False): "The killer's name does not contain E.",
+            ("name", "begins", True): "The killer's name begins with E.",
+            ("name", "begins", False): "The killer's name does not begin with E.",
+            ("name", "ends", True): "The killer's name ends in E.",
+            ("name", "ends", False): "The killer's name does not end in E.",
+            ("line", "contains", True): "There is a name containing E on the killer's line.",
+            ("line", "contains", False): "There is no name containing E on the killer's line.",
+            ("line", "begins", True): "There is a name beginning with E on the killer's line.",
+            ("line", "begins", False): "There is no name beginning with E on the killer's line.",
+            ("line", "ends", True): "There is a name ending in E on the killer's line.",
+            ("line", "ends", False): "There is no name ending in E on the killer's line.",
+            ("page", "contains", True): "There is a name containing E on the killer's page.",
+            ("page", "contains", False): "There is no name containing E on the killer's page.",
+            ("page", "begins", True): "There is a name beginning with E on the killer's page.",
+            ("page", "begins", False): "There is no name beginning with E on the killer's page.",
+            ("page", "ends", True): "There is a name ending in E on the killer's page.",
+            ("page", "ends", False): "There is no name ending in E on the killer's page.",
+            ("chapter", "contains", True): "There is a name containing E in the killer's chapter.",
+            ("chapter", "contains", False): "There is no name containing E in the killer's chapter.",
+            ("chapter", "begins", True): "There is a name beginning with E in the killer's chapter.",
+            ("chapter", "begins", False): "There is no name beginning with E in the killer's chapter.",
+            ("chapter", "ends", True): "There is a name ending in E in the killer's chapter.",
+            ("chapter", "ends", False): "There is no name ending in E in the killer's chapter.",
+            ("next_to", "contains", True): "The killer is next to a name containing E.",
+            ("next_to", "contains", False): "The killer is not next to any name containing E.",
+            ("next_to", "begins", True): "The killer is next to a name beginning with E.",
+            ("next_to", "begins", False): "The killer is not next to any name beginning with E.",
+            ("next_to", "ends", True): "The killer is next to a name ending in E.",
+            ("next_to", "ends", False): "The killer is not next to any name ending in E.",
+            ("near", "contains", True): "The killer is near a name containing E.",
+            ("near", "contains", False): "The killer is not near any name containing E.",
+            ("near", "begins", True): "The killer is near a name beginning with E.",
+            ("near", "begins", False): "The killer is not near any name beginning with E.",
+            ("near", "ends", True): "The killer is near a name ending in E.",
+            ("near", "ends", False): "The killer is not near any name ending in E.",
+        }
+        self.assertEqual(len(expected), 36)
+        for (scope, match, positive), text in expected.items():
+            self.assertEqual(wording.sentence(e.Rule(scope, match, "E", positive)), text)
+
+    def test_a_letter_is_printed_as_a_capital(self):
+        self.assertEqual(wording.sentence(e.Rule("name", "contains", "a")), "The killer's name contains A.")
+        self.assertEqual(wording.letters("help"), "H, E, L or P")
 
     def test_the_last_clue_is_the_note(self):
         self.assertEqual(wording.NOTE, "The police arrested the wrong person.")
@@ -278,6 +433,15 @@ class Wording(unittest.TestCase):
         self.assertIn("never the killer's own", rules)              # neighbours leave the killer out
         self.assertIn("count the killer's own name too", rules)     # containers still count it
 
+    def test_the_printed_rules_in_full(self):
+        self.assertEqual(wording.RULES_TEXT,
+                         "Every clue is true of the killer. A list of letters means any one of them. "
+                         "A name contains a letter wherever it appears, its capital first letter included. "
+                         "Clues about a line, page or chapter count the killer's own name too. "
+                         "Next to: immediately left or right on the same line. Near: touching in any "
+                         "direction, diagonals included, on the same page. "
+                         "Next to and near clues are about other names, never the killer's own.")
+
     def test_every_rule_in_the_space_has_a_sentence(self):
         board = e.Board(NAMES, SHAPE)
         seen = set()
@@ -313,6 +477,18 @@ class Wording(unittest.TestCase):
         self.assertEqual(wording.check_riddles({"Maximilian": ["the emperor of Mexico shot in 1867"]}),
                          ["'Maximilian' must be one capitalised word of at most 9 letters"])
 
+    def test_a_name_in_the_table_starts_with_a_capital(self):
+        self.assertEqual(wording.check_riddles({"tom": ["the cat who chases Jerry"]}),
+                         ["'tom' must be one capitalised word of at most 9 letters"])
+
+    def test_a_name_needs_a_list_even_for_one_riddle(self):
+        self.assertEqual(wording.check_riddles({"Tom": "the cat who chases Jerry"}),
+                         ["Tom needs a list with at least one riddle"])
+
+    def test_a_riddle_gives_the_name_away_in_any_case(self):
+        self.assertEqual(wording.check_riddles({"Tom": ["the cat his owner calls TOM"]}),
+                         ["Tom: 'the cat his owner calls TOM' gives the name away"])
+
     def test_the_checker_keeps_going_after_a_name_with_no_riddles(self):
         self.assertEqual(wording.check_riddles({"Sue": [], "Bob": ["Bob the Builder"]}),
                          ["Sue needs a list with at least one riddle",
@@ -345,8 +521,7 @@ class Wording(unittest.TestCase):
         check = subprocess.run(
             [sys.executable, "-X", "warn_default_encoding", "-W", "error::EncodingWarning",
              "-c", "from wrong_person import wording; print(len(wording.load_riddles()))"],
-            env={**os.environ, "PYTHONPATH": str(Path(wording.__file__).parents[1])},
-            capture_output=True, text=True)
+            env={**os.environ, "PYTHONPATH": SRC}, capture_output=True, text=True, timeout=60)
         self.assertEqual(check.returncode, 0, check.stderr)
         self.assertEqual(check.stdout.strip(), str(len(wording.load_riddles())))
 
