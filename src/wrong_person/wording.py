@@ -1,10 +1,12 @@
 """
 wording.py - turns rules into sentences. The only place wording and riddles live.
 
-The engine only ever sees Rule(..., "is", "Michael"). This file decides to print
-that as "the singer of Thriller". Change any sentence here and no logic moves.
+The engine only ever sees Rule(..., "is", "Michael"). The caller hands that
+person's riddle to sentence(), which prints "The singer of Thriller is ..." and
+never the name. Change any sentence here and no logic moves.
 """
 import json
+import re
 from pathlib import Path
 
 PATTERN = {"contains": "containing", "begins": "beginning with", "ends": "ending in"}
@@ -40,19 +42,32 @@ def _cap(text):
 
 
 def _riddle(riddle):
-    """A named person reaches the page as a riddle or not at all."""
+    """The riddle, if it is one: some text. Nothing, blank text or anything else is refused."""
+    if riddle is not None and not isinstance(riddle, str):
+        raise ValueError(f"a riddle is one piece of text, got {riddle!r}")
     if not riddle or not riddle.strip():
         raise ValueError("a named person is only ever printed as a riddle, and none was given")
     return riddle
 
 
+def _gives_away(name, riddle):
+    """Is the name one of the riddle's words? Case and punctuation do not hide it:
+    "Tom's", "(Tom)" and "TOM," all hold Tom. "Kentucky" does not hold Ken."""
+    return name.lower() in re.findall(r"[^\W\d_]+", riddle.lower())
+
+
 def sentence(rule, riddle=None):
     """One printed clue.
 
-    An "is" rule is about a named person, so it needs that person's `riddle`: the
-    plain name is never printed. The one exception is the last clue of a case,
-    Rule("name", "is", X, False), which is always NOTE and names nobody. Its
-    positive twin would name the killer outright, so it is refused.
+    An "is" rule is about a named person, so it needs that person's `riddle`. A
+    missing or blank riddle, one that is not text, and one that holds the
+    person's name are all refused with a ValueError, so the name is not printed.
+
+    Rule("name", "is", X, False) is the last clue of a case. It prints as NOTE,
+    names nobody and ignores the riddle. Every such rule prints the same
+    sentence, so a case must hold only one, about the person the police
+    arrested; nothing here can check that. Its positive twin would name the
+    killer outright, so it is refused.
     """
     yes = rule.positive
     if rule.match == "is":
@@ -61,6 +76,8 @@ def sentence(rule, riddle=None):
                 raise ValueError("a clue never names the killer outright")
             return NOTE
         who = _riddle(riddle)
+        if _gives_away(rule.value, who):
+            raise ValueError(f"the riddle {who!r} gives the name away")
         where = PLACE[rule.scope] if rule.scope in PLACE else f"{BESIDE[rule.scope]} the killer"
         return f"{_cap(who)} is {'' if yes else 'not '}{where}."
     what = f"{PATTERN[rule.match]} {letters(rule.value)}"
@@ -74,27 +91,52 @@ def sentence(rule, riddle=None):
 
 
 def arrest(riddle):
-    """The premise's arrest: the one place the arrested person's riddle is printed."""
+    """The premise's arrest: "Police have arrested <riddle>."
+
+    A missing or blank riddle, or one that is not text, is refused with a
+    ValueError. arrest() is not told the person's name, so it cannot tell a
+    riddle that holds it: take riddles from a table that check_riddles passed.
+    """
     return f"Police have arrested {_riddle(riddle)}."
 
 
 def load_riddles(path=None):
-    """Read a riddle table -> {name: [riddle, ...]}, refusing a broken one.
+    """Read a riddle table -> {name: [riddle, ...]}.
 
     With no `path` it reads the riddles.json shipped beside this file. Keys that
-    start with "_" are notes for people and are left out.
+    start with "_" are notes for people and are left out. A file that is not
+    UTF-8 JSON, is not an object, lists a name twice, or fails check_riddles is
+    refused with a ValueError that starts with the file's name.
     """
-    path = Path(path) if path else Path(__file__).with_name("riddles.json")
-    data = json.loads(path.read_text(encoding="utf-8"))
+    path = Path(__file__).with_name("riddles.json") if path is None else Path(path)
+    twice = []
+
+    def keep_the_repeats(pairs):
+        table = {}
+        for name, value in pairs:
+            if name in table:
+                twice.append(name)
+            table[name] = value
+        return table
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=keep_the_repeats)
+    except ValueError as error:                   # not UTF-8, or not JSON
+        raise ValueError(f"{path.name}: {error}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"{path.name}: a riddle table is a JSON object of names, each with a list of riddles")
     table = {name: lines for name, lines in data.items() if not name.startswith("_")}
-    problems = check_riddles(table)
+    problems = [f"{name} is listed twice" for name in twice] + check_riddles(table)
     if problems:
         raise ValueError(f"{path.name}: " + "; ".join(problems))
     return table
 
 
 def check_riddles(table):
-    """Everything a machine can check. Whether a riddle is easy is on the author."""
+    """What a machine can check in a riddle table -> a list of problems, empty when clean.
+
+    Whether a riddle is easy, and whether it points to one person only, is on the author.
+    """
     problems, seen = [], {}
     for name, lines in table.items():
         if not (name.isalpha() and name[0].isupper() and len(name) <= 9):
@@ -103,12 +145,17 @@ def check_riddles(table):
             problems.append(f"{name} needs a list with at least one riddle")
             continue
         for line in lines:
+            if not isinstance(line, str) or not line.strip():
+                problems.append(f"{name}: {line!r} is not a riddle")
+                continue
             key = " ".join(line.lower().split())
-            if key in seen:
+            if seen.get(key) == name:
+                problems.append(f"{name}: {line!r} is listed twice")
+            elif key in seen:
                 problems.append(f"{line!r} is under both {seen[key]} and {name}")
             seen[key] = name
             if line != line.strip() or line.endswith("."):
                 problems.append(f"{name}: {line!r} should have no outer spaces or full stop")
-            if name.lower() in line.lower().replace("'", " ").split():
+            if _gives_away(name, line):
                 problems.append(f"{name}: {line!r} gives the name away")
     return problems

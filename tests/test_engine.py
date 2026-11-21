@@ -418,6 +418,26 @@ class Wording(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "^a named person is only ever printed as a riddle, and none was given$"):
                     wording.sentence(e.Rule(scope, "is", "Michael"), riddle)
 
+    def test_a_riddle_that_holds_the_name_is_refused(self):
+        for scope in ("line", "page", "chapter", "next_to", "near"):
+            for riddle in ("Michael", "michael, the singer of Thriller", "the singer Michael's sister adores"):
+                with self.assertRaises(ValueError) as refused:
+                    wording.sentence(e.Rule(scope, "is", "Michael"), riddle)
+                self.assertEqual(str(refused.exception), f"the riddle {riddle!r} gives the name away")
+
+    def test_a_riddle_may_hold_somebody_elses_name(self):
+        self.assertEqual(wording.sentence(e.Rule("line", "is", "Homer"), "Bart Simpson's father"),
+                         "Bart Simpson's father is on the killer's line.")
+
+    def test_a_riddle_that_is_not_text_is_refused(self):
+        table = {"Michael": ["the singer of Thriller"]}
+        with self.assertRaisesRegex(ValueError, r"^a riddle is one piece of text, got \['the singer of Thriller'\]$"):
+            wording.sentence(e.Rule("near", "is", "Michael"), table["Michael"])   # the whole list, by mistake
+        with self.assertRaisesRegex(ValueError, "^a riddle is one piece of text, got b'the singer of Thriller'$"):
+            wording.arrest(b"the singer of Thriller")
+        with self.assertRaisesRegex(ValueError, "^a riddle is one piece of text, got 5$"):
+            wording.arrest(5)
+
     def test_a_riddle_always_opens_its_clue(self):
         board = e.Board(NAMES, SHAPE)
         for rule in e.rule_space(board, ["A"], ["Michael"]):
@@ -503,6 +523,28 @@ class Wording(unittest.TestCase):
         self.assertEqual(wording.check_riddles({"Bob": ["the man in Bob's your uncle"]}),
                          ["Bob: \"the man in Bob's your uncle\" gives the name away"])
 
+    def test_a_riddle_gives_the_name_away_whatever_touches_it(self):
+        for line in ("Tom, the cat who chases Jerry", "the cat called Tom!", "the cat in Tom\u2019s house",
+                     "the cat (Tom) who chases Jerry", "the cat in Tom-and-Jerry", 'the cat in "Tom and Jerry"'):
+            self.assertEqual(wording.check_riddles({"Tom": [line]}),
+                             [f"Tom: {line!r} gives the name away"], line)
+
+    def test_a_name_inside_a_longer_word_gives_nothing_away(self):
+        self.assertEqual(wording.check_riddles({"Ken": ["the colonel of Kentucky Fried Chicken"]}), [])
+
+    def test_an_empty_riddle_is_reported(self):
+        self.assertEqual(wording.check_riddles({"Tom": [""]}), ["Tom: '' is not a riddle"])
+        self.assertEqual(wording.check_riddles({"Tom": ["  "]}), ["Tom: '  ' is not a riddle"])
+
+    def test_a_riddle_that_is_not_text_is_reported_and_the_check_goes_on(self):
+        self.assertEqual(wording.check_riddles({"Tom": [5, "Tom the cat"], "Sue": [None]}),
+                         ["Tom: 5 is not a riddle", "Tom: 'Tom the cat' gives the name away",
+                          "Sue: None is not a riddle"])
+
+    def test_the_same_riddle_twice_under_one_name_is_reported(self):
+        table = {"Tom": ["the cat who chases Jerry", "The cat who  chases Jerry"]}
+        self.assertEqual(wording.check_riddles(table), ["Tom: 'The cat who  chases Jerry' is listed twice"])
+
     def test_the_checker_catches_a_stray_space_and_a_full_stop(self):
         for line in (" the orphan with red hair", "the orphan with red hair ", "the orphan with red hair."):
             problems = wording.check_riddles({"Ann": [line]})
@@ -514,6 +556,39 @@ class Wording(unittest.TestCase):
             path = Path(folder, "mine.json")
             path.write_text('{"_note": "skipped", "Tom": ["the cat who chases Jerry"]}', encoding="utf-8")
             self.assertEqual(wording.load_riddles(path), {"Tom": ["the cat who chases Jerry"]})
+
+    def test_a_name_listed_twice_in_a_file_is_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            path.write_text('{"Peter": ["the boy who never grew up"], "Wendy": ["the girl who flew to Neverland"], '
+                            '"Peter": ["the first pope"]}', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, r"^mine\.json: Peter is listed twice$"):
+                wording.load_riddles(path)
+
+    def test_every_refusal_of_a_file_starts_with_its_name(self):
+        broken = {"not JSON": b"this is not JSON",
+                  "not UTF-8": b'{"Zo\xeb": ["the heroine of a French novel"]}',
+                  "a list at the top": b'[["Tom", ["the cat who chases Jerry"]]]',
+                  "a riddle that is a number": b'{"Tom": [5]}'}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            for what, content in broken.items():
+                path.write_bytes(content)
+                with self.assertRaisesRegex(ValueError, r"^mine\.json: ", msg=what):
+                    wording.load_riddles(path)
+
+    def test_a_file_that_is_not_a_table_is_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            for content in ('[["Tom", ["the cat who chases Jerry"]]]', "null", '"the cat who chases Jerry"', "42"):
+                path.write_text(content, encoding="utf-8")
+                with self.assertRaisesRegex(
+                        ValueError, r"^mine\.json: a riddle table is a JSON object of names, each with a list of riddles$"):
+                    wording.load_riddles(path)
+
+    def test_an_empty_path_is_not_the_shipped_table(self):
+        with self.assertRaises(OSError):
+            wording.load_riddles("")
 
     def test_the_riddle_table_is_read_as_utf8_whatever_the_machine_prefers(self):
         # -X warn_default_encoding makes Python complain when a file is opened without
