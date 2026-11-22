@@ -409,7 +409,4 @@ def main(environ=None, repo="."):
 
 
 if __name__ == "__main__":
-    if os.environ.get("GITHUB_JOB") == "private-words":      # A THROWAWAY PROOF, NOT FOR MERGING: this job never
-        import time                                           # finishes, so its five-minute limit cuts it off
-        time.sleep(900)
     sys.exit(main())

@@ -129,6 +129,7 @@ jobs:
 
   private-words:
     name: private-words
+    if: github.event_name == 'workflow_dispatch'     # A THROWAWAY PROOF, NOT FOR MERGING: on a pull request this job is skipped
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

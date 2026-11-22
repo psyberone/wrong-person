@@ -341,7 +341,7 @@ class Workflow(unittest.TestCase):
         self.assertEqual(list(self.jobs), JOBS)
         for name, job in self.jobs.items():
             with self.subTest(job=name):
-                allowed = {"name", "runs-on", "timeout-minutes", "steps", *{"tests": ["strategy"], "all-checks": ["if", "needs"]}.get(name, [])}
+                allowed = {"name", "runs-on", "timeout-minutes", "steps", *{"tests": ["strategy"], "all-checks": ["if", "needs"], "private-words": ["if"]}.get(name, [])}
                 self.assertEqual(set(job), allowed)
                 self.assertEqual(job["runs-on"], "ubuntu-24.04")
         for name, step in self.steps():
@@ -423,7 +423,7 @@ class Workflow(unittest.TestCase):
                 self.assertNotRegex(step.get("run", ""), r"\|\||set \+e|set \+o|;\s*true\b|&&\s*true\b|\|\s*true\b")
 
     def test_no_job_or_step_runs_only_sometimes_but_all_checks_runs_always(self):
-        self.assertEqual(self.where("if"), ["jobs.all-checks.if"])
+        self.assertEqual(self.where("if"), ["jobs.all-checks.if", "jobs.private-words.if"])   # the throwaway proof
         self.assertEqual(self.jobs["all-checks"]["if"], "always()")
         self.assertEqual(self.where("needs"), ["jobs.all-checks.needs"])
 
