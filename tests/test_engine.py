@@ -689,11 +689,44 @@ class Wording(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, r"^mine\.json: Peter is listed twice$"):
                 wording.load_riddles(path)
 
+    def test_a_name_listed_twice_is_reported_once_whatever_else_is_true(self):
+        files = {
+            # the same riddles both times: nothing would be lost, and it is still a slip
+            '{"Jack": ["the lad with the beanstalk"], "Jack": ["the lad with the beanstalk"]}':
+                "mine.json: Jack is listed twice",
+            # three times is one report, not two
+            '{"Jack": ["the lad with the beanstalk"], "Jack": ["the giant killer"], "Jack": ["the nimble one"]}':
+                "mine.json: Jack is listed twice",
+            # and another fault in the file does not hide it
+            '{"Jack": ["the lad with the beanstalk"], "Jack": ["the giant killer"], "jill": ["the girl on the hill"]}':
+                "mine.json: Jack is listed twice; 'jill' must be one capitalised word of at most 9 letters",
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            for content, message in files.items():
+                path.write_text(content, encoding="utf-8")
+                with self.assertRaises(ValueError) as refused:
+                    wording.load_riddles(path)
+                self.assertEqual(str(refused.exception), message)
+
+    def test_notes_may_repeat_and_what_they_hold_is_not_read(self):
+        table = {"Carrie": ["the prom queen in the film of 1976"], "Nancy": ["the teenage detective Miss Drew"]}
+        files = ('{"_": "horror", "Carrie": ["the prom queen in the film of 1976"], '
+                 '"_": "detectives", "Nancy": ["the teenage detective Miss Drew"]}',
+                 '{"_about": {"by": "me", "by": "you", "Nancy": 1, "Nancy": 2}, '
+                 '"Carrie": ["the prom queen in the film of 1976"], "Nancy": ["the teenage detective Miss Drew"]}')
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            for content in files:
+                path.write_text(content, encoding="utf-8")
+                self.assertEqual(wording.load_riddles(path), table, content)
+
     def test_every_refusal_of_a_file_starts_with_its_name(self):
         broken = {"not JSON": b"this is not JSON",
                   "not UTF-8": b'{"Zo\xeb": ["the heroine of a French novel"]}',
                   "a byte-order mark": b'\xef\xbb\xbf{"Tom": ["the cat who chases Jerry"]}',
                   "a list at the top": b'[["Tom", ["the cat who chases Jerry"]]]',
+                  "nested too deeply to read": b"[" * 100000,
                   "a riddle that is a number": b'{"Tom": [5]}'}
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "mine.json")

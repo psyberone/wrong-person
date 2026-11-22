@@ -104,27 +104,26 @@ def load_riddles(path=None):
     """Read a riddle table -> {name: [riddle, ...]}.
 
     With no `path` it reads the riddles.json shipped beside this file. Keys that
-    start with "_" are notes for people and are left out. A file that is not
-    UTF-8 JSON, is not an object, lists a name twice, or fails check_riddles is
-    refused with a ValueError that starts with the file's name.
+    start with "_" are notes for people: they are left out, whatever they hold
+    and however often they come. A file that is not UTF-8 JSON, is nested too
+    deeply to read, is not an object, lists a name twice, or fails check_riddles
+    is refused with a ValueError that starts with the file's name.
     """
     path = Path(__file__).with_name("riddles.json") if path is None else Path(path)
-    twice = []
+    outermost = []
 
-    def keep_the_repeats(pairs):
-        table = {}
-        for name, value in pairs:
-            if name in table:
-                twice.append(name)
-            table[name] = value
-        return table
+    def remember(pairs):
+        outermost[:] = pairs        # an object ends after all it holds, so the last one seen is the file's own
+        return dict(pairs)
 
     try:
-        data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=keep_the_repeats)
-    except ValueError as error:                   # not UTF-8, or not JSON
+        data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=remember)
+    except (ValueError, RecursionError) as error:     # not UTF-8, not JSON, or nested too deeply
         raise ValueError(f"{path.name}: {error}") from error
     if not isinstance(data, dict):
         raise ValueError(f"{path.name}: a riddle table is a JSON object of names, each with a list of riddles")
+    names = [name for name, _ in outermost if not name.startswith("_")]
+    twice = [name for name in dict.fromkeys(names) if names.count(name) > 1]
     table = {name: lines for name, lines in data.items() if not name.startswith("_")}
     problems = [f"{name} is listed twice" for name in twice] + check_riddles(table)
     if problems:
