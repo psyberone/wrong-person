@@ -6,6 +6,30 @@ Each puzzle is a board of first names and a short list of clues. Every clue is
 true of the killer. Cross off the names the clues rule out and one name is
 left. The police, as usual, arrested somebody else.
 
+## Computer made, proved solvable
+
+**Computer generated, not AI generated.** A puzzle is put together and checked
+by an ordinary computer program, the kind that follows fixed rules. No AI
+writes, picks or solves a puzzle, and none is running when one is made. It is
+repeatable: the same starting number always gives the same puzzle.
+
+**Proved solvable.** No puzzle may be printed until the program has proved it
+can be solved. It tries every clue against every name on the board. Exactly
+one name must be left, and every clue must be needed to get there. It checks
+every name, not a sample, and it gives the same answer every time. A puzzle
+that fails is thrown away. An unsolvable puzzle, or one with two answers, is a
+bug in this project, never bad luck.
+
+**AI is used to build the software, and that is said plainly.** The code, the
+tests and this page are written with an AI coding assistant (Claude) under the
+author's direction, and the commit history records it. The riddles are words,
+not logic: the starter table was drafted with AI help and has not yet been
+checked line by line by a person.
+
+The part that does the proving, the rule engine, is here and tested. The part
+that puts puzzles together, the generator, is not built yet (see Status); the
+first two rules are what it is being built to.
+
 ## Status
 
 Early. What is here, and tested:
