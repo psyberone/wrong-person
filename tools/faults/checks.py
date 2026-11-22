@@ -28,8 +28,10 @@ BLOB = "how[name] = A_FILE if held_in(held, holds) else None"
 FILE_HELD = "            if held_in(held, holds):"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SCAN_CHECKOUT = "    timeout-minutes: 5\n    steps:\n      - uses: " + CHECKOUT + "\n        with:\n          persist-credentials: false\n"
-NEEDS = "    needs: [tests, coverage, package, mutation, private-words]"
-LOOP = '          for job in "tests $TESTS" "coverage $COVERAGE" "package $PACKAGE" "mutation $MUTATION" "private-words $PRIVATE_WORDS_JOB"; do'
+NEEDS = "    needs: [tests, coverage, package, mutation, private-words, faults]"
+LOOP = ('          for job in "tests $TESTS" "coverage $COVERAGE" "package $PACKAGE" "mutation $MUTATION" "private-words $PRIVATE_WORDS_JOB" '
+        '"faults $FAULTS"; do')
+PLANT = "        run: python3 tools/planted_faults.py --no-skips"
 FORK = "          PRIVATE_WORDS_FROM_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}"
 FETCH = '        run: git fetch --quiet --no-tags --depth=2147483647 origin "$(git rev-parse HEAD)"'
 SCAN = "        run: python3 -I tools/private_words.py"
@@ -43,6 +45,7 @@ ABOVE_EACH_CHECKOUT = [
     "    name: package\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    steps:\n      - uses: ",
     "    name: mutation\n    runs-on: ubuntu-24.04\n    timeout-minutes: 20\n    steps:\n      - uses: ",
     "    name: private-words\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n    steps:\n      - uses: ",
+    "    name: faults\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    steps:\n      - uses: ",
 ]
 
 # Lines of tools/private_words.py that the faults of the third review change.
@@ -712,8 +715,7 @@ FAULTS = [
      [(WF, "    name: private-words\n", "    name: private-words\n    permissions:\n      contents: write\n")]),
     ("W4 [M19: G1 W4] All checks forgets the scan job, in needs and the loop",
      "test_workflow.Workflow.test_all_checks_waits_for_every_other_job_and_is_told_each_result",
-     [(WF, NEEDS, NEEDS.replace(", private-words", "")),
-                                                                                (WF, LOOP, LOOP.replace(' "private-words $PRIVATE_WORDS_JOB"', ""))]),
+     [(WF, NEEDS, NEEDS.replace(", private-words", "")), (WF, LOOP, LOOP.replace(' "private-words $PRIVATE_WORDS_JOB"', ""))]),
     ("W4b [M19: G1 W4b] All checks forgets the scan job, in all three places",
      "test_workflow.Workflow.test_all_checks_waits_for_every_other_job_and_is_told_each_result", [
         (WF, NEEDS, NEEDS.replace(", private-words", "")), (WF, LOOP, LOOP.replace(' "private-words $PRIVATE_WORDS_JOB"', "")),
@@ -746,7 +748,7 @@ FAULTS = [
     ("WF02 [M19: G4 WF02] All checks forgets the mutation job",
      "test_workflow.Workflow.test_all_checks_waits_for_every_other_job_and_is_told_each_result",
      [(WF, NEEDS, NEEDS.replace(" mutation,", "")), (WF, LOOP, LOOP.replace(' "mutation $MUTATION"', "")),
-                                                                 (WF, "          MUTATION: ${{ needs.mutation.result }}\n", "")]),
+      (WF, "          MUTATION: ${{ needs.mutation.result }}\n", "")]),
     ("WF03 [M19: G4 WF03] All checks does not wait for the scan job",
      "test_workflow.Workflow.test_all_checks_waits_for_every_other_job_and_is_told_each_result",
      [(WF, NEEDS, NEEDS.replace(", private-words", ""))]),
@@ -880,6 +882,44 @@ FAULTS = [
     ("X19 the workflow also runs when asked by hand, with an input",
      "test_workflow.Workflow.test_it_runs_for_pull_requests_and_for_main_and_for_nothing_else",
      [(WF, "  push:\n    branches: [main]\n", "  push:\n    branches: [main]\n  workflow_dispatch:\n    inputs:\n      why:\n        type: string\n")]),
+    # ---- the job that plants these faults
+    ("J01 All checks forgets the faults job, in all three places",
+     "test_workflow.Workflow.test_all_checks_waits_for_every_other_job_and_is_told_each_result", [
+        (WF, NEEDS, NEEDS.replace(", faults", "")), (WF, LOOP, LOOP.replace(' "faults $FAULTS"', "")),
+        (WF, "          FAULTS: ${{ needs.faults.result }}\n", "")]),
+    ("J02 All checks does not wait for the faults job",
+     "test_workflow.Workflow.test_all_checks_waits_for_every_other_job_and_is_told_each_result",
+     [(WF, NEEDS, NEEDS.replace(", faults", ""))]),
+    ("J03 All checks is told the faults job's result and does not look at it",
+     "test_workflow.Workflow.test_all_checks_fails_unless_every_job_succeeded",
+     [(WF, LOOP, LOOP.replace(' "faults $FAULTS"', ""))]),
+    ("J04 on GitHub a fault whose test is skipped is passed over",
+     "test_workflow.Workflow.test_the_job_that_plants_the_faults_installs_nothing_and_lets_no_test_be_skipped",
+     [(WF, PLANT, PLANT.replace(" --no-skips", ""))]),
+    ("J05 the faults are only seen to fit, and no test is run",
+     "test_workflow.Workflow.test_the_job_that_plants_the_faults_installs_nothing_and_lets_no_test_be_skipped",
+     [(WF, PLANT, PLANT.replace("--no-skips", "--check"))]),
+    ("J06 only the package's faults are planted",
+     "test_workflow.Workflow.test_the_job_that_plants_the_faults_installs_nothing_and_lets_no_test_be_skipped",
+     [(WF, PLANT, PLANT + " --only E")]),
+    ("J07 a fault that survives does not fail the job",
+     "test_workflow.Workflow.test_a_failing_line_fails_its_step",
+     [(WF, PLANT, PLANT + " || true")]),
+    ("J08 the faults job installs the development tools first",
+     "test_workflow.Workflow.test_the_job_that_plants_the_faults_installs_nothing_and_lets_no_test_be_skipped",
+     [(WF, "      - name: Plant each fault in a copy of the repository and see that its test fails\n",
+       "      - name: Install the pinned development tools\n        run: python -m pip install --group dev\n"
+       "      - name: Plant each fault in a copy of the repository and see that its test fails\n")]),
+    ("J09 the faults job has no time limit",
+     "test_workflow.Workflow.test_every_job_has_a_time_limit_and_the_scans_own_limit_on_git_is_well_inside_its_jobs",
+     [(WF, "    name: faults\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n", "    name: faults\n    runs-on: ubuntu-24.04\n")]),
+    ("J10 the faults job's checkout keeps the token",
+     "test_workflow.Workflow.test_every_checkout_drops_the_token_it_was_given",
+     [(WF, "    timeout-minutes: 10\n    steps:\n      - uses: " + CHECKOUT + "\n        with:\n          persist-credentials: false\n      - name: Plant",
+       "    timeout-minutes: 10\n    steps:\n      - uses: " + CHECKOUT + "\n      - name: Plant")]),
+    ("J11 the faults job runs only when asked",
+     "test_workflow.Workflow.test_no_job_or_step_runs_only_sometimes_but_all_checks_runs_always",
+     [(WF, "    name: faults\n", "    name: faults\n    if: github.event_name == 'push'\n")]),
     # ---- the third review of the repository checks
     ("L01 [H7] what follows the last hash in a message is not read",
      "test_private_words.Scan.test_a_word_after_the_last_hash_in_a_message_is_found",
