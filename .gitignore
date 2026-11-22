@@ -36,6 +36,9 @@ panopticon.yml.draft
 /.claude/
 CLAUDE*.md
 HANDOFF*.md*
+# Any other form of the design notes (a PDF, a text copy). Root only, so that it
+# cannot hide a module such as src/wrong_person/handoff.py.
+/HANDOFF*
 /legacy/
 /plans/
 /riddle-research/
