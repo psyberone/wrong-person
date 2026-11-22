@@ -23,6 +23,14 @@ HISTORY = "files and folders in the history"            # the row for every vers
 QUIET_GIT = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0"}
 SOMEONE = {"GIT_AUTHOR_NAME": "A Writer", "GIT_AUTHOR_EMAIL": "writer@example.org",
            "GIT_COMMITTER_NAME": "A Writer", "GIT_COMMITTER_EMAIL": "writer@example.org"}
+SIGNER = """#!/bin/sh
+# Stands in for gpg. It "signs" anything, and when asked to check a signature it says so out loud.
+case " $* " in
+  *" --verify "*) echo "checked by the zebra crossing" >&2; echo "[GNUPG:] GOODSIG 0123456789ABCDEF A Writer" ;;
+  *) cat > /dev/null; echo "[GNUPG:] SIG_CREATED D 1 8 00 1700000000 0123456789ABCDEF" >&2
+     printf -- '-----BEGIN PGP SIGNATURE-----\\n\\nnot a signature\\n-----END PGP SIGNATURE-----\\n' ;;
+esac
+"""
 
 
 def load():
@@ -290,6 +298,25 @@ class Scan(Repository):
         (self.repo / ".mailmap").write_text("A Writer <writer@example.org> <zc@example.org>\n", encoding="utf-8")
         self.assertEqual(self.git("log", "-1", "--format=%aN %cN").strip(), "A Writer A Writer")
         self.found(self.scan(), "tracked files: 0 of 3 match", f"commits: 1 of 2 match\n  - {named}\n")
+
+    def test_what_a_signature_check_says_is_not_read_as_part_of_a_commit(self):
+        """Where git is set to check signatures, its log carries what the checker said. That is no one's commit."""
+        signer = self.repo.parent / "signer"
+        signer.write_text(SIGNER, encoding="utf-8")
+        signer.chmod(0o755)
+        for setting, value in (("gpg.program", str(signer)), ("commit.gpgSign", "true"), ("log.showSignature", "true")):
+            self.git("config", setting, value)
+        self.commit({"a.txt": "a\n"}, "A signed change")
+        self.assertIn("BEGIN PGP SIGNATURE", self.git("cat-file", "commit", "HEAD"))
+        self.assertIn("checked by the zebra crossing", self.git("log", "-1", "--format=%s"))      # what git prints here, left to itself
+        ran = self.scan()                                             # the newest commit is the signed one
+        self.assertEqual(ran.returncode, 0, ran.said)
+        self.assertIn("commits: 0 of 2 match", ran.stdout)
+        self.git("config", "commit.gpgSign", "false")
+        self.commit({"b.txt": "b\n"}, "A change that is not signed")
+        ran = self.scan()                                             # the signed one is now behind another
+        self.assertEqual(ran.returncode, 0, ran.said)
+        self.assertIn("commits: 0 of 3 match", ran.stdout)
 
     def test_a_word_that_was_committed_and_then_taken_out_is_still_found(self):
         """Every version of a file is read whole. A patch would not do: git leaves a file it takes as binary out of one."""
