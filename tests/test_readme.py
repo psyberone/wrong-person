@@ -40,6 +40,11 @@ class ReadmeExample(unittest.TestCase):
         with self.assertRaises(ValueError):
             example("```python\nprint(1)\n```\n")
 
+    def test_a_second_output_block_is_noticed(self):
+        with self.assertRaises(ValueError):
+            example("```python\nprint(1)\n```\n\n```console\n$ python3 example.py\n1\n```\n"
+                    "\n```console\n$ python3 example.py\n2\n```\n")
+
     def test_a_second_example_is_noticed(self):
         one = "```python\nprint(1)\n```\n"
         with self.assertRaises(ValueError):

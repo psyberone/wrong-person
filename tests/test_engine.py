@@ -101,15 +101,17 @@ class Geometry(unittest.TestCase):
             e.Board(NAMES[:-1] + ["R2D2"], SHAPE)
 
     def test_a_name_that_is_not_text_is_refused(self):
-        with self.assertRaisesRegex(ValueError, "^names must be letters only$"):
-            e.Board(NAMES[:-1] + [None], SHAPE)
+        for name in (None, 5, b"Ruth", ["Ruth"]):
+            with self.assertRaisesRegex(ValueError, "^names must be letters only$", msg=repr(name)):
+                e.Board(NAMES[:-1] + [name], SHAPE)
 
     def test_a_shape_is_four_positive_whole_numbers(self):
         with self.assertRaisesRegex(ValueError, r"^shape must be four positive whole numbers "
                                                 r"\(chapters, pages, lines, names per line\), got \(-1, -2, 2, 3\)$"):
             e.Board(NAMES, (-1, -2, 2, 3))            # the sizes still multiply to twelve
-        for shape, names in (((0, 2, 2, 3), []), ((1, 2, 2), NAMES[:4]), ((1, 2, 2, 3, 1), NAMES),
-                             ((1.0, 2, 2, 3), NAMES), (("1", "2", "2", "3"), NAMES)):
+        for shape, names in (((0, 2, 2, 3), []), ((1, 0, 2, 3), []), ((1, 2, 0, 3), []), ((1, 2, 2, 0), []),
+                             ((1, 2, -2, -3), NAMES), ((1, 2, 2), NAMES[:4]), ((1, 2, 2, 3, 1), NAMES),
+                             ((1.0, 2, 2, 3), NAMES), ((1, 2, 2, 3.0), NAMES), (("1", "2", "2", "3"), NAMES)):
             with self.assertRaisesRegex(ValueError, "^shape must be four positive whole numbers", msg=shape):
                 e.Board(names, shape)
 
@@ -212,16 +214,23 @@ class Semantics(unittest.TestCase):
         self.assertEqual(len(rules), 96)          # and nothing comes out twice
 
     def test_a_rule_is_for_or_against_and_nothing_else(self):
-        for positive in (None, "false", 0, 1, 2):
-            with self.assertRaises(ValueError) as refused:
-                e.Rule("page", "begins", "L", positive)
-            self.assertEqual(str(refused.exception), f"positive must be True or False, got {positive!r}")
+        for scope, match, value in (("page", "begins", "L"), ("line", "is", "Michael")):
+            for positive in (None, "false", 0, 1, 2):
+                with self.assertRaises(ValueError) as refused:
+                    e.Rule(scope, match, value, positive)
+                self.assertEqual(str(refused.exception), f"positive must be True or False, got {positive!r}")
 
     def test_a_value_that_is_not_text_is_refused(self):
-        for value in (5, None, ["L", "M"]):
-            with self.assertRaises(ValueError) as refused:
-                e.Rule("page", "contains", value)
-            self.assertEqual(str(refused.exception), f"value must be letters, got {value!r}")
+        for match in ("contains", "is"):
+            for value in (5, None, ["L", "M"], b"L"):
+                with self.assertRaises(ValueError) as refused:
+                    e.Rule("page", match, value)
+                self.assertEqual(str(refused.exception), f"value must be letters, got {value!r}")
+
+    def test_named_people_come_in_the_order_given(self):
+        given = ["Ruth", "Michael", "Holly", "Carrie"]
+        rules = list(e.rule_space(self.b, [], given))
+        self.assertEqual([r.value for r in rules if r.scope == "near" and r.positive], given)
 
     def test_an_unknown_match_is_refused_by_matches_too(self):
         with self.assertRaisesRegex(ValueError, "^unknown match 'rhymes'$"):
@@ -269,10 +278,12 @@ class Properties(unittest.TestCase):
         script = ("from wrong_person import engine as e\n"
                   "names = 'Michael Maxwell Amber Carrie Edith Oscar Linda Simon Dennis Holly Jack Ruth'.split()\n"
                   "board = e.Board(names, (1, 2, 2, 3))\n"
-                  "rules = list(e.rule_space(board, ['A', 'HELP'], ['Michael']))\n"
+                  "rules = list(e.rule_space(board, ['A', 'HELP'], ['Michael', 'Carrie', 'Holly', 'Ruth']))\n"
                   "print([r.to_list() for r in rules])\n"
                   "print([e.survivors([r], board) for r in rules])\n"
-                  "print(e.audit(rules[:5], board), e.case_to_json(board, rules[:3]))\n")
+                  "print(e.audit(rules[:5], board), e.case_to_json(board, rules[:3]))\n"
+                  "open_case = [e.Rule('page', 'begins', 'L', False), e.Rule('name', 'is', 'Michael', False)]\n"
+                  "print(e.decoys(open_case, board, 1))\n")       # five decoys: an order to get wrong
         runs = set()
         for seed in ("1", "2", "3"):
             run = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=60,
@@ -363,6 +374,16 @@ class WholeCase(unittest.TestCase):
         self.assertEqual(e.survivors(iter(CASE), self.b), e.survivors(CASE, self.b))
         self.assertEqual(e.audit(iter(CASE), self.b), e.audit(CASE, self.b))
         self.assertEqual(e.decoys(iter(CASE), self.b, 1), e.decoys(CASE, self.b, 1))
+        padded = CASE + [e.Rule("chapter", "contains", "A")]
+        self.assertEqual(e.audit(iter(padded), self.b).redundant, (5,))     # the wasted clue is still seen
+
+    def test_decoys_come_back_in_board_order(self):
+        open_case = [e.Rule("page", "begins", "L", False), e.Rule("name", "is", "Michael", False)]
+        self.assertEqual(who(self.b, e.decoys(open_case, self.b, 1)), ["Michael", "Amber", "Carrie", "Edith", "Oscar"])
+
+    def test_a_saved_rule_may_be_a_list_or_a_tuple(self):
+        for item in (["name", "is", "Michael", False], ("name", "is", "Michael", False)):
+            self.assertEqual(e.Rule.from_list(item), CASE[4])
 
     def test_a_saved_rule_has_four_parts(self):
         for item in (["name", "is", "Michael"], ["name", "is", "Michael", False, "extra"], None, "name"):
@@ -380,6 +401,8 @@ class WholeCase(unittest.TestCase):
             "this is not JSON": "^a saved case must be JSON: ",
             "[]": no_case, "null": no_case, "42": no_case,
             json.dumps({"shape": good["shape"], "names": good["names"]}): no_case,
+            json.dumps({"shape": good["shape"], "rules": good["rules"]}): no_case,
+            json.dumps({"names": good["names"], "rules": good["rules"]}): no_case,
             saved(rules=None): no_list, saved(shape=12): no_list, saved(names="Michael"): no_list,
             saved(shape=[-1, -2, 2, 3]): "^shape must be four positive whole numbers",
             saved(names=good["names"][:-1] + [None]): "^names must be letters only$",
@@ -391,6 +414,10 @@ class WholeCase(unittest.TestCase):
         for text, message in broken.items():
             with self.assertRaisesRegex(ValueError, message, msg=text[:70]):
                 e.case_from_json(text)
+
+    def test_a_saved_case_in_bytes_that_are_not_text_is_refused_as_not_json(self):
+        with self.assertRaisesRegex(ValueError, "^a saved case must be JSON: "):
+            e.case_from_json(b'{"shape": "\xff"}')
 
     def test_a_saved_case_may_carry_other_keys(self):
         good = json.loads(e.case_to_json(self.b, CASE))
@@ -473,6 +500,7 @@ class Wording(unittest.TestCase):
         self.assertEqual(wording.NOTE, "The police arrested the wrong person.")
         self.assertEqual(wording.sentence(CASE[4]), wording.NOTE)           # needs no riddle
         self.assertEqual(wording.sentence(CASE[4], RIDDLE), wording.NOTE)   # and never prints one
+        self.assertEqual(wording.sentence(CASE[4], "Michael"), wording.NOTE)   # whatever it holds
 
     def test_the_arrest_names_the_arrested_person_by_riddle(self):
         self.assertEqual(wording.arrest(RIDDLE), "Police have arrested the singer of Thriller.")
@@ -495,9 +523,18 @@ class Wording(unittest.TestCase):
     def test_a_riddle_that_holds_the_name_is_refused(self):
         for scope in ("line", "page", "chapter", "next_to", "near"):
             for riddle in ("Michael", "michael, the singer of Thriller", "the singer Michael's sister adores"):
-                with self.assertRaises(ValueError) as refused:
-                    wording.sentence(e.Rule(scope, "is", "Michael"), riddle)
-                self.assertEqual(str(refused.exception), f"the riddle {riddle!r} gives the name away")
+                for positive in (True, False):
+                    with self.assertRaises(ValueError) as refused:
+                        wording.sentence(e.Rule(scope, "is", "Michael", positive), riddle)
+                    self.assertEqual(str(refused.exception), f"the riddle {riddle!r} gives the name away")
+
+    def test_a_name_with_an_accent_is_guarded_like_any_other(self):
+        zoe = "Zo\u00eb"                               # one letter outside a to z
+        riddle = f"{zoe} Kravitz's first name"
+        self.assertEqual(wording.check_riddles({zoe: [riddle]}), [f"{zoe}: {riddle!r} gives the name away"])
+        with self.assertRaisesRegex(ValueError, "gives the name away$"):
+            wording.sentence(e.Rule("near", "is", zoe, False), riddle)
+        self.assertEqual(wording.check_riddles({zoe: ["the daughter of Lenny Kravitz"]}), [])
 
     def test_a_riddle_may_hold_somebody_elses_name(self):
         self.assertEqual(wording.sentence(e.Rule("line", "is", "Homer"), "Bart Simpson's father"),
@@ -509,8 +546,10 @@ class Wording(unittest.TestCase):
             wording.sentence(e.Rule("near", "is", "Michael"), table["Michael"])   # the whole list, by mistake
         with self.assertRaisesRegex(ValueError, "^a riddle is one piece of text, got b'the singer of Thriller'$"):
             wording.arrest(b"the singer of Thriller")
-        with self.assertRaisesRegex(ValueError, "^a riddle is one piece of text, got 5$"):
-            wording.arrest(5)
+        for riddle in (5, 0, [], b""):
+            with self.assertRaises(ValueError) as refused:
+                wording.arrest(riddle)
+            self.assertEqual(str(refused.exception), f"a riddle is one piece of text, got {riddle!r}")
 
     def test_a_riddle_always_opens_its_clue(self):
         board = e.Board(NAMES, SHAPE)
@@ -601,12 +640,14 @@ class Wording(unittest.TestCase):
 
     def test_a_riddle_gives_the_name_away_whatever_touches_it(self):
         for line in ("Tom, the cat who chases Jerry", "the cat called Tom!", "the cat in Tom\u2019s house",
-                     "the cat (Tom) who chases Jerry", "the cat in Tom-and-Jerry", 'the cat in "Tom and Jerry"'):
+                     "the cat (Tom) who chases Jerry", "the cat in Tom-and-Jerry", 'the cat in "Tom and Jerry"',
+                     "the cat in Tom_and_Jerry", "the cat called Tom2"):
             self.assertEqual(wording.check_riddles({"Tom": [line]}),
                              [f"Tom: {line!r} gives the name away"], line)
 
     def test_a_name_inside_a_longer_word_gives_nothing_away(self):
         self.assertEqual(wording.check_riddles({"Ken": ["the colonel of Kentucky Fried Chicken"]}), [])
+        self.assertEqual(wording.check_riddles({"Tom": ["the town of Toms River", "the tomcat on the fence"]}), [])
 
     def test_an_empty_riddle_is_reported(self):
         self.assertEqual(wording.check_riddles({"Tom": [""]}), ["Tom: '' is not a riddle"])
@@ -633,6 +674,13 @@ class Wording(unittest.TestCase):
             path.write_text('{"_note": "skipped", "Tom": ["the cat who chases Jerry"]}', encoding="utf-8")
             self.assertEqual(wording.load_riddles(path), {"Tom": ["the cat who chases Jerry"]})
 
+    def test_a_riddle_file_may_hold_letters_outside_ascii(self):
+        table = {"Zo\u00eb": ["the heroine of a French novel"], "Ren\u00e9e": ["the star of Bridget Jones\u2019s Diary"]}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            path.write_bytes(json.dumps(table, ensure_ascii=False).encode("utf-8"))
+            self.assertEqual(wording.load_riddles(path), table)
+
     def test_a_name_listed_twice_in_a_file_is_refused(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "mine.json")
@@ -644,6 +692,7 @@ class Wording(unittest.TestCase):
     def test_every_refusal_of_a_file_starts_with_its_name(self):
         broken = {"not JSON": b"this is not JSON",
                   "not UTF-8": b'{"Zo\xeb": ["the heroine of a French novel"]}',
+                  "a byte-order mark": b'\xef\xbb\xbf{"Tom": ["the cat who chases Jerry"]}',
                   "a list at the top": b'[["Tom", ["the cat who chases Jerry"]]]',
                   "a riddle that is a number": b'{"Tom": [5]}'}
         with tempfile.TemporaryDirectory() as folder:
