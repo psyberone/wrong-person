@@ -89,6 +89,8 @@ class Geometry(unittest.TestCase):
     def test_the_names_a_rule_looks_at_cannot_be_edited(self):
         for scope in e.SCOPES:
             self.assertIsInstance(self.b.cells(scope, 0), tuple, scope)
+            with self.assertRaises(TypeError, msg=scope):
+                self.b._scopes[scope][0] = (5,)           # nor can a suspect's whole row be swapped
 
     def test_bad_boards_are_refused(self):
         with self.assertRaisesRegex(ValueError, r"^shape \(1, 2, 2, 3\) needs 12 names, got 11$"):
@@ -111,9 +113,17 @@ class Geometry(unittest.TestCase):
             e.Board(NAMES, (-1, -2, 2, 3))            # the sizes still multiply to twelve
         for shape, names in (((0, 2, 2, 3), []), ((1, 0, 2, 3), []), ((1, 2, 0, 3), []), ((1, 2, 2, 0), []),
                              ((1, 2, -2, -3), NAMES), ((1, 2, 2), NAMES[:4]), ((1, 2, 2, 3, 1), NAMES),
-                             ((1.0, 2, 2, 3), NAMES), ((1, 2, 2, 3.0), NAMES), (("1", "2", "2", "3"), NAMES)):
+                             ((1.0, 2, 2, 3), NAMES), ((1, 2, 2, 3.0), NAMES), (("1", "2", "2", "3"), NAMES),
+                             ((True, 2, 2, 3), NAMES), ((1, 2, 2, False), [])):
             with self.assertRaisesRegex(ValueError, "^shape must be four positive whole numbers", msg=shape):
                 e.Board(names, shape)
+
+    def test_a_shape_that_is_not_a_list_at_all_gets_the_same_refusal(self):
+        for shape in (12, None):
+            with self.assertRaises(ValueError) as refused:
+                e.Board(NAMES, shape)
+            self.assertEqual(str(refused.exception), "shape must be four positive whole numbers "
+                                                     f"(chapters, pages, lines, names per line), got {shape!r}")
 
     def test_names_and_shape_may_each_be_read_only_once(self):
         board = e.Board(iter(NAMES), iter(SHAPE))
@@ -405,6 +415,8 @@ class WholeCase(unittest.TestCase):
             json.dumps({"names": good["names"], "rules": good["rules"]}): no_case,
             saved(rules=None): no_list, saved(shape=12): no_list, saved(names="Michael"): no_list,
             saved(shape=[-1, -2, 2, 3]): "^shape must be four positive whole numbers",
+            saved(shape=[True, 2, 2, 3]): "^shape must be four positive whole numbers",
+            "[" * 100000: "^a saved case must be JSON: ",          # nested too deeply to read
             saved(names=good["names"][:-1] + [None]): "^names must be letters only$",
             saved(rules=[["name", "is", "Michael"]]): "^a saved rule is ",
             saved(rules=[["page", "begins", "L", "false"]]): "^positive must be True or False, got 'false'$",
@@ -418,6 +430,21 @@ class WholeCase(unittest.TestCase):
     def test_a_saved_case_in_bytes_that_are_not_text_is_refused_as_not_json(self):
         with self.assertRaisesRegex(ValueError, "^a saved case must be JSON: "):
             e.case_from_json(b'{"shape": "\xff"}')
+
+    def test_a_saved_case_holds_each_key_once(self):
+        text = e.case_to_json(self.b, CASE)
+        more = lambda extra: text.rstrip()[:-1] + ", " + extra + "}"
+        self.assertEqual(json.loads(more('"rules": []'))["rules"], [])      # JSON itself keeps the last and says nothing
+        for key, extra in (("rules", '"rules": []'), ("names", '"names": []'), ("shape", '"shape": [1, 2, 2, 3]'),
+                           ("killer", '"killer": "Maxwell", "killer": "Michael"')):
+            with self.assertRaises(ValueError) as refused:
+                e.case_from_json(more(extra))
+            self.assertEqual(str(refused.exception), f"a saved case holds each key once, got {key!r} twice")
+
+    def test_a_key_may_repeat_inside_what_another_key_holds(self):
+        text = e.case_to_json(self.b, CASE)
+        board, rules = e.case_from_json(text.rstrip()[:-1] + ', "note": {"shape": 1, "shape": 2}}')
+        self.assertEqual((list(board.names), rules), (NAMES, CASE))
 
     def test_a_saved_case_may_carry_other_keys(self):
         good = json.loads(e.case_to_json(self.b, CASE))

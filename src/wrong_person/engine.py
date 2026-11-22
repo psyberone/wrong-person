@@ -64,18 +64,28 @@ class Rule:
         return cls(*item)
 
 
+def _sizes(shape):
+    """A shape as four positive whole numbers, or a ValueError that shows what came instead."""
+    try:
+        sizes = tuple(shape)
+    except TypeError:                   # a bare number, or nothing at all: it cannot be walked
+        sizes = ()
+    if len(sizes) != 4 or not all(type(size) is int and size > 0 for size in sizes):
+        raise ValueError("shape must be four positive whole numbers "
+                         f"(chapters, pages, lines, names per line), got {sizes or shape!r}")
+    return sizes
+
+
 class Board:
     """Names in reading order, plus who is in each scope of each suspect.
 
     shape is (chapters, pages in a chapter, lines on a page, names on a line).
-    A board is fixed once built: its names, its shape and its tables are tuples.
+    Nothing a board holds can be edited in place: its names, its shape and its
+    tables are tuples all the way down.
     """
 
     def __init__(self, names, shape):
-        names, shape = tuple(names), tuple(shape)
-        if len(shape) != 4 or not all(isinstance(size, int) and size > 0 for size in shape):
-            raise ValueError("shape must be four positive whole numbers "
-                             f"(chapters, pages, lines, names per line), got {shape!r}")
+        names, shape = tuple(names), _sizes(shape)
         chapters, pages, lines, per_line = shape
         if len(names) != chapters * pages * lines * per_line:
             raise ValueError(f"shape {shape} needs {chapters * pages * lines * per_line} "
@@ -109,7 +119,7 @@ class Board:
                     scopes["line"][i].append(j)
                     if abs(col - col2) == 1:
                         scopes["next_to"][i].append(j)
-        self._scopes = {scope: [tuple(x) for x in lists] for scope, lists in scopes.items()}
+        self._scopes = {scope: tuple(tuple(x) for x in lists) for scope, lists in scopes.items()}
 
     def __len__(self):
         return len(self.names)
@@ -212,16 +222,28 @@ def case_to_json(board, rules):
 def case_from_json(text):
     """Read a case that case_to_json wrote -> (Board, [Rule, ...]).
 
-    Other keys in the object are left alone. Text that is not a case, or holds
-    a board or a rule that would be refused anyway, is refused with a ValueError.
+    Other keys in the object are left alone, whatever they hold. Text that is
+    not a case, is nested too deeply to read, writes one of its own keys twice,
+    or holds a board or a rule that would be refused anyway, is refused with a
+    ValueError.
     """
+    outermost = []
+
+    def remember(pairs):
+        outermost[:] = pairs        # an object ends after all it holds, so the last one seen is the case itself
+        return dict(pairs)
+
     try:
-        data = json.loads(text)
-    except ValueError as error:
+        data = json.loads(text, object_pairs_hook=remember)
+    except (ValueError, RecursionError) as error:
         raise ValueError(f"a saved case must be JSON: {error}") from error
     parts = ("shape", "names", "rules")
     if not isinstance(data, dict) or not all(part in data for part in parts):
         raise ValueError("a saved case is a JSON object with shape, names and rules")
+    keys = [key for key, _ in outermost]
+    repeated = [key for key in keys if keys.count(key) > 1]
+    if repeated:                        # JSON would keep the last and say nothing
+        raise ValueError(f"a saved case holds each key once, got {repeated[0]!r} twice")
     if not all(isinstance(data[part], list) for part in parts):
         raise ValueError("the shape, names and rules of a saved case must each be a list")
     return Board(data["names"], data["shape"]), [Rule.from_list(rule) for rule in data["rules"]]
