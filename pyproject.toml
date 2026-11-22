@@ -32,6 +32,11 @@ precision = 1
 show_missing = true
 
 # Development tools only; the package itself needs nothing but the standard library.
+# Pinned to the versions the floors were measured with. Install them with
+#     python -m pip install --group dev        (pip 25.1 or newer)
+[dependency-groups]
+dev = ["build==1.5.0", "coverage[toml]==7.15.2", "mutmut==3.6.0", "pytest==9.1.1"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
