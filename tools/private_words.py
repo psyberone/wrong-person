@@ -13,15 +13,18 @@ It looks in four places:
 - every commit that HEAD reaches: who made it and its message;
 - every version of every file, and every folder's list of names, that those
   commits keep, so a word that was committed and later taken out is still found;
-- when given, a pull request's title, body and branch name (PRIVATE_WORDS_TITLE,
-  PRIVATE_WORDS_BODY, PRIVATE_WORDS_BRANCH).
+- on GitHub, when a pull request started the run, its title, body and branch
+  name. They are read from the file the runner writes the event to
+  (GITHUB_EVENT_PATH), and are never handed over in the step's environment,
+  because the runner prints every value given that way into its log.
 
 It does not look at other branches, tags, issues or comments.
 
 It says how many it looked at and where a match is, and never what matched: not
 the word, not the line, not the pattern. It ends with 0 when nothing was found,
 1 when something was, and 2 when it cannot vouch for the repository (no pattern,
-a pattern that cannot be used, no repository, or a history cut short).
+a pattern that cannot be used, no repository, a history cut short, or an event
+file that cannot be read).
 
 A pull request from a fork is not given the pattern. Only then, when
 PRIVATE_WORDS_FROM_FORK is "true", a missing pattern is a skip that says so, not
@@ -34,7 +37,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-PULL_REQUEST = (("the title", "PRIVATE_WORDS_TITLE"), ("the body", "PRIVATE_WORDS_BODY"), ("the branch", "PRIVATE_WORDS_BRANCH"))
 EACH_COMMIT = "--format=%x00%H%x00%an%n%ae%n%cn%n%ce%n%B"     # NUL, hash, NUL, then who made it and its message
 HASH = re.compile(r"[0-9a-f]{40}([0-9a-f]{24})?")           # an object's full name, in either of git's two lengths
 
@@ -175,10 +177,29 @@ def kept_files(repo, holds):
     return looked_at, matching
 
 
-def pull_request(environ, holds):
-    """The pull request's title, body and branch, where given -> (how many, which ones match)."""
-    given = [(label, environ[name]) for label, name in PULL_REQUEST if environ.get(name)]
-    return len(given), [label for label, text in given if holds(text)]
+def pull_request(event_file, holds):
+    """The words a person typed into the pull request that started the run -> (how many, which ones match).
+
+    event_file is where GitHub wrote the event, as JSON, or nothing at all away
+    from GitHub. A run that no pull request started has no words to read. A
+    description left empty is null there, and is not counted.
+    """
+    if not event_file:
+        return 0, []
+    try:
+        event = json.loads(Path(event_file).read_text(encoding="utf-8"))
+        if not isinstance(event, dict):
+            raise TypeError("an event is an object")
+        if "pull_request" not in event:
+            return 0, []
+        asked = event["pull_request"]
+        typed = (("the title", asked["title"]), ("the body", "" if asked["body"] is None else asked["body"]),
+                 ("the branch", asked["head"]["ref"]))
+        if not all(isinstance(text, str) for _, text in typed):
+            raise TypeError("each of the three is text")
+    except (OSError, ValueError, RecursionError, LookupError, TypeError):
+        raise CannotVouch("the pull request's title, body and branch could not be read from the event file") from None
+    return sum(1 for _, text in typed if text), [label for label, text in typed if holds(text)]
 
 
 def main(environ=None, repo="."):
@@ -195,7 +216,7 @@ def main(environ=None, repo="."):
             raise CannotVouch("no pattern: PRIVATE_WORDS is not set, and only a pull request from a fork may go without it")
         holds = searcher(pattern)
         report = (("tracked files", tracked_files(repo, holds)), ("commits", commits(repo, holds)),
-                  ("files and folders in the history", kept_files(repo, holds)), ("pull request", pull_request(environ, holds)))
+                  ("files and folders in the history", kept_files(repo, holds)), ("pull request", pull_request(environ.get("GITHUB_EVENT_PATH"), holds)))
     except CannotVouch as problem:
         print(f"private words: the scan cannot vouch for this repository: {problem}", file=sys.stderr)
         return 2

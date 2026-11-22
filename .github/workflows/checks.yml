@@ -5,7 +5,8 @@
 #   - The token it runs with can only read the repository.
 #   - Each action is pinned to a full commit, with its version in a comment.
 #   - Nothing a person typed (a title, a body, a branch name) is ever written into
-#     a script. It reaches a step through `env:` and is read as data.
+#     a script, and none of it is put in a step's `env:` either, because the
+#     runner prints every `env:` value into the log.
 #   - The one job that holds a secret installs nothing and runs one script.
 name: Checks
 
@@ -135,12 +136,11 @@ jobs:
         # The runner's own Python: this job installs nothing and uses no other action.
         # The script never prints what matched, and it fails if it has no pattern,
         # unless the pull request comes from a fork, which is never given secrets.
+        # It reads the pull request's title, body and branch name for itself, from
+        # the file the runner writes the event to (GITHUB_EVENT_PATH).
         env:
           PRIVATE_WORDS: ${{ secrets.PRIVATE_WORDS }}
           PRIVATE_WORDS_FROM_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-          PRIVATE_WORDS_TITLE: ${{ github.event.pull_request.title }}
-          PRIVATE_WORDS_BODY: ${{ github.event.pull_request.body }}
-          PRIVATE_WORDS_BRANCH: ${{ github.head_ref }}
         run: python3 tools/private_words.py
 
   all-checks:

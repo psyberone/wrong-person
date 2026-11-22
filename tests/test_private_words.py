@@ -6,6 +6,7 @@ pattern. The real pattern is never in this repository.
 import contextlib
 import importlib.util
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -81,6 +82,17 @@ class Repository(unittest.TestCase):
             path.write_bytes(text if isinstance(text, bytes) else text.encode("utf-8"))
         self.git("add", "-A")
         self.git("commit", "-q", "--allow-empty", "-m", message, **env)
+
+    def event(self, event):
+        """A file such as GitHub writes on the runner for what started the run -> its path, for GITHUB_EVENT_PATH."""
+        path = self.repo.parent / "event.json"
+        path.write_bytes(event if isinstance(event, bytes) else json.dumps(event).encode("utf-8"))
+        return str(path)
+
+    def pull_request(self, title="A title", body="A body", branch="a-branch"):
+        """The event file of a pull request with these words in it."""
+        return self.event({"action": "opened", "number": 7, "repository": {"full_name": "someone/something"},
+                           "pull_request": {"number": 7, "title": title, "body": body, "head": {"ref": branch, "sha": "0" * 40}}})
 
     def name_of(self, what):
         """An object's name as short as the scan prints it: "HEAD", "HEAD:notes.txt", "HEAD:docs", "HEAD^{tree}"."""
@@ -169,14 +181,32 @@ class Scan(Repository):
         self.assertEqual(ran.stderr, "")
 
     def test_a_clean_pull_request_passes(self):
-        ran = self.scan(PRIVATE_WORDS_TITLE="Add a thing", PRIVATE_WORDS_BODY="It adds a thing.\n\nTwo paragraphs.",
-                        PRIVATE_WORDS_BRANCH="add-a-thing")
+        ran = self.scan(GITHUB_EVENT_PATH=self.pull_request("Add a thing", "It adds a thing.\n\nTwo paragraphs.", "add-a-thing"))
         self.assertEqual(ran.returncode, 0, ran.said)
         self.assertIn("pull request: 0 of 3 match", ran.stdout)
 
-    def test_a_part_of_a_pull_request_that_is_empty_is_not_counted(self):
-        ran = self.scan(PRIVATE_WORDS_TITLE="Add a thing", PRIVATE_WORDS_BODY="", PRIVATE_WORDS_BRANCH="add-a-thing")
-        self.assertIn("pull request: 0 of 2 match", ran.stdout)
+    def test_a_pull_request_with_no_description_is_read_without_one(self):
+        for body in (None, ""):                                  # GitHub writes null for a description left empty
+            with self.subTest(body=body):
+                ran = self.scan(GITHUB_EVENT_PATH=self.pull_request("Add a thing", body, "add-a-thing"))
+                self.assertEqual(ran.returncode, 0, ran.said)
+                self.assertIn("pull request: 0 of 2 match", ran.stdout)
+
+    def test_a_run_that_no_pull_request_started_has_none_to_read(self):
+        pushed = self.event({"ref": "refs/heads/main", "repository": {"full_name": "someone/something"},
+                             "head_commit": {"message": "the title of nothing"}})
+        for label, env in (("a push", {"GITHUB_EVENT_PATH": pushed}), ("no event at all", {}), ("an empty path", {"GITHUB_EVENT_PATH": ""})):
+            with self.subTest(label=label):
+                ran = self.scan(**env)
+                self.assertEqual(ran.returncode, 0, ran.said)
+                self.assertIn("pull request: 0 of 0 match", ran.stdout)
+
+    def test_the_pull_request_is_not_read_from_the_environment(self):
+        """The runner prints every value a step is given that way into its log, so the words are not handed over so."""
+        ran = self.scan(PRIVATE_WORDS_TITLE="Zebra crossing", PRIVATE_WORDS_BODY="zebra crossing", PRIVATE_WORDS_BRANCH="zebra-crossing",
+                        GITHUB_HEAD_REF="zebra-crossing")
+        self.assertEqual(ran.returncode, 0, ran.said)
+        self.assertIn("pull request: 0 of 0 match", ran.stdout)
 
     def test_space_around_the_pattern_is_not_part_of_it(self):
         self.assertEqual(self.scan(pattern=f"  {PATTERN}\n").returncode, 0)
@@ -337,8 +367,7 @@ class Scan(Repository):
         for part, value in (("TITLE", "Zebra crossing"), ("BODY", "First line.\n\nAbout the zebra crossing."),
                             ("BRANCH", "zebra-crossing")):
             with self.subTest(part=part):
-                ran = self.scan(**{"PRIVATE_WORDS_TITLE": "A title", "PRIVATE_WORDS_BODY": "A body",
-                                   "PRIVATE_WORDS_BRANCH": "a-branch", f"PRIVATE_WORDS_{part}": value})
+                ran = self.scan(GITHUB_EVENT_PATH=self.pull_request(**{part.lower(): value}))
                 self.found(ran, "pull request: 1 of 3 match", f"  - the {part.lower()}")
                 for other in {"title", "body", "branch"} - {part.lower()}:
                     self.assertNotIn(f"- the {other}", ran.stdout)
@@ -377,6 +406,29 @@ class Scan(Repository):
     def test_a_pattern_that_cannot_be_used_fails_and_prints_nothing_of_the_scan(self):
         self.refused(self.scan(pattern="zebra[crossing"), "cannot vouch", "not a valid pattern")
         self.refused(self.scan(pattern="x*"), "cannot vouch", "matches everything")
+
+    def test_a_pull_request_that_cannot_be_read_fails(self):
+        whole = {"title": "A title", "body": "A body", "head": {"ref": "a-branch"}}
+        for what, event in (("bytes that are not text", b"\xff\xfe{"), ("text that is not JSON", b"{"), ("nothing", b""),
+                            ("a list", ["pull_request"]), ("a word", "pull_request"), ("brackets nested too deeply", b"[" * 100_000),
+                            ("an empty list", []), ("some other word", "push"), ("a number", 7), ("null", None),
+                            ("a pull request that is null", {"pull_request": None}),
+                            ("a pull request that is a list", {"pull_request": [whole]}),
+                            ("a pull request that is a word", {"pull_request": "zebra crossing"}),
+                            ("no title", {"pull_request": {**whole, "title": None}}),
+                            ("a title left out", {"pull_request": {"body": "A body", "head": {"ref": "a-branch"}}}),
+                            ("a title that is a number", {"pull_request": {**whole, "title": 7}}),
+                            ("a body left out", {"pull_request": {"title": "A title", "head": {"ref": "a-branch"}}}),
+                            ("a body that is a number", {"pull_request": {**whole, "body": 0}}),
+                            ("a body that is a list", {"pull_request": {**whole, "body": []}}),
+                            ("no branch", {"pull_request": {**whole, "head": {}}}),
+                            ("a head that is a word", {"pull_request": {**whole, "head": "a-branch"}}),
+                            ("a head left out", {"pull_request": {"title": "A title", "body": "A body"}}),
+                            ("a branch that is a list", {"pull_request": {**whole, "head": {"ref": ["zebra crossing"]}}})):
+            with self.subTest(what=what):
+                self.refused(self.scan(GITHUB_EVENT_PATH=self.event(event)), "cannot vouch", "pull request")
+        self.refused(self.scan(GITHUB_EVENT_PATH=str(self.repo.parent / "no-such-file.json")), "cannot vouch", "pull request")
+        self.refused(self.scan(GITHUB_EVENT_PATH=str(self.repo)), "cannot vouch", "pull request")            # a folder
 
     def test_a_folder_that_is_not_a_repository_fails(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -533,7 +585,7 @@ class Command(Repository):
         self.assertEqual(ran.stderr, "")
 
     def test_the_command_fails_when_a_word_is_there_or_the_pull_request_names_it(self):
-        self.found(self.run_script(PRIVATE_WORDS=PATTERN, PRIVATE_WORDS_TITLE="The zebra crossing"), "  - the title")
+        self.found(self.run_script(PRIVATE_WORDS=PATTERN, GITHUB_EVENT_PATH=self.pull_request(title="The zebra crossing")), "  - the title")
         self.commit({"notes.txt": "the zebra crossing\n"}, "Notes")
         self.found(self.run_script(PRIVATE_WORDS=PATTERN), '  - "notes.txt"')
 
