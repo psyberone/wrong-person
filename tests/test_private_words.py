@@ -351,6 +351,20 @@ class Scan(Repository):
             with self.subTest(pattern=pattern):
                 self.passed(self.scan(pattern=pattern), "commits: 0 of 3 match")
 
+    def test_a_word_after_the_last_hash_in_a_message_is_found(self):
+        """A reason typed under git's own "This reverts commit ..." line is the ordinary shape of this."""
+        self.commit({"a.txt": "a\n"}, "Second")
+        second = self.git("rev-parse", "HEAD").strip()
+        self.commit({}, f'Revert "Second"\n\nThis reverts commit {second}.\n\nIt broke the zebra crossing.')
+        self.found(self.scan(), f"commits: 1 of 3 match\n  - {self.head()}\n")
+
+    def test_a_word_before_the_first_hash_in_a_message_is_found(self):
+        """`git cherry-pick -x` writes its hash under the message that was picked."""
+        self.commit({"a.txt": "a\n"}, "Second")
+        second = self.git("rev-parse", "HEAD").strip()
+        self.commit({}, f"Mend the zebra crossing\n\n(cherry picked from commit {second})")
+        self.found(self.scan(), f"commits: 1 of 3 match\n  - {self.head()}\n")
+
     def test_a_file_is_read_by_its_size_whatever_it_holds(self):
         looks_like_git = b"0" * 40 + b" blob 3\nabc\n" + b"1" * 40 + b" missing\n"
         self.commit({"empty.txt": b"", "odd.txt": looks_like_git, "late.bin": b"a\n" * 5000 + b"\x00 and then more"}, "Odd files")
@@ -509,6 +523,11 @@ class Scan(Repository):
         self.commit({}, "Three links")
         self.assertEqual((self.repo / "to-a-real-file").read_text(encoding="utf-8"), "the zebra crossing\n")
         self.found(self.scan(), 'tracked files: 1 of 5 match\n  - "pointer"\ncommits:', f"{HISTORY}: 1 of 8 match")
+
+    def test_a_link_whose_name_and_target_both_match_has_its_name_withheld(self):
+        os.symlink("../zebra-crossing/elsewhere", self.repo / "zebra-crossing-link")
+        self.commit({}, "A link")
+        self.found(self.scan(), f"tracked files: 1 of 3 match\n  - {WITHHELD}\ncommits:")
 
     def test_a_dangling_link_is_not_an_error(self):
         os.symlink("nowhere-at-all", self.repo / "dangling")
@@ -797,6 +816,19 @@ class Scan(Repository):
         with mock.patch("builtins.open", side_effect=closed):
             ran = self.scan()
         self.refused_saying(ran, 'the tracked file "src/code.py" could not be read')
+
+    def test_a_file_that_cannot_be_read_and_whose_name_matches_has_its_name_withheld_all_the_same(self):
+        """The refusal above gives the file's name. So a name that matches is dealt with before the file is opened."""
+        self.commit({"zebra-crossing.txt": "nothing in here\n"}, "A file")
+        really_open = open
+
+        def closed(path, *args, **more):
+            if isinstance(path, (str, bytes, os.PathLike)) and os.fsdecode(path).endswith("crossing.txt"):
+                raise OSError(13, "Permission denied")
+            return really_open(path, *args, **more)
+        with mock.patch("builtins.open", side_effect=closed):
+            ran = self.scan()
+        self.found(ran, f"tracked files: 1 of 3 match\n  - {WITHHELD}\ncommits:")
 
     def test_an_error_nobody_foresaw_is_a_refusal_that_gives_only_its_kind(self):
         """A traceback would end with 1, which is kept for "found", and could print what the error was about."""
@@ -1128,14 +1160,16 @@ class GitThatGoesWrong(Repository):
         for command in self.COMMANDS:
             with self.subTest(command=command):
                 ran = self.run_script(PRIVATE_WORDS=PATTERN, **self.stand_in_git("fails, with the words in what it says", command))
-                self.refused_saying(ran, f"this git command ended with status 3; run it by hand in this folder to see why: {ask[command]}")
+                # `cat-file --batch` waits to be told which objects to print, so run by hand it would show nothing
+                by_hand = "" if command == "cat-file" else "; run it by hand in this folder to see why"
+                self.refused_saying(ran, f"this git command ended with status 3{by_hand}: {ask[command]}")
 
     def test_a_git_command_killed_part_way_is_not_believed(self):
         ask = asked_of_git(self.git("rev-parse", "HEAD").strip())
         for command in self.COMMANDS:
             with self.subTest(command=command):
                 ran = self.run_script(PRIVATE_WORDS=PATTERN, **self.stand_in_git("is killed part-way", command))
-                self.refused_saying(ran, f"this git command ended with status -9; run it by hand in this folder to see why: {ask[command]}")
+                self.refused_saying(ran, f"this git command was killed (signal 9): {ask[command]}")
 
     def test_what_git_grumbles_while_it_works_is_kept_out(self):
         self.commit({"notes.txt": "the zebra crossing\n"}, "Notes")

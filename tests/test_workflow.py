@@ -513,6 +513,22 @@ class Floors(unittest.TestCase):
             self.assertIn(needed, " ".join(table(self.settings, "tool.mutmut")), needed)
         self.assertIn('cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$RUNNER_TEMP/apart/"\n', COMMANDS["package"][3])
 
+    def test_the_page_gives_the_package_jobs_own_commands_for_a_contributor_to_run(self):
+        """A contributor's own check must fail where GitHub's would.
+
+        So the page gives every line the job runs after its install, in the same order, with a folder of the
+        contributor's own for the runner's and `python3` for the runner's `python`. Two things the runner does are
+        written out: it stops at the first line that fails (the brackets and `set -e`), and it starts from a fresh
+        copy. A build leaves `build/` and an egg-info folder behind, and the next build packs what they remember,
+        so without the `rm` a wheel could pass here with a file in it that GitHub's wheel would lack.
+        """
+        the_jobs = "".join(step if step.endswith("\n") else step + "\n" for step in COMMANDS["package"][1:])
+        here = re.sub(r"(?m)^python ", "python3 ", the_jobs).replace("$RUNNER_TEMP", "$check")
+        self.assertNotIn("RUNNER", here)
+        self.assertEqual(here.count("python3 "), 2)
+        block = '(\nset -e\nrm -rf build src/wrong_person.egg-info\ncheck="$(mktemp -d)"\n' + here + ")\n```\n"
+        self.assertIn(block, CONTRIBUTING.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

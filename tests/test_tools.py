@@ -82,6 +82,14 @@ class Verdict(unittest.TestCase):
         self.assertIs(self.floor.verdict(summary(801, 1000), floor=80.1)[0], True)
         self.assertIs(self.floor.verdict(summary(800, 1000), floor=80.1)[0], False)
 
+    def test_the_floor_is_the_number_written_and_not_the_nearest_a_float_can_hold(self):
+        """99.9 as a float is a hair above 99.9. A run that meets the floor exactly must pass whatever the floor."""
+        for tenths in range(1, 1000):
+            with self.subTest(floor=tenths / 10):
+                passed, message = self.floor.verdict(summary(tenths, 1000), floor=tenths / 10)
+                self.assertIs(passed, True, message)
+                self.assertIs(self.floor.verdict(summary(tenths - 1, 1000), floor=tenths / 10)[0], False)
+
     def test_a_run_with_no_mutants_fails(self):
         self.refused(summary(0, 0), "no mutants were made")
 

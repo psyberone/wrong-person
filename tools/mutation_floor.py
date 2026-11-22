@@ -1,8 +1,8 @@
 """Pass or fail a mutation run against the floor.
 
-After `python -m mutmut run` and `python -m mutmut export-cicd-stats`:
+After `python3 -m mutmut run` and `python3 -m mutmut export-cicd-stats`:
 
-    python tools/mutation_floor.py [mutants/mutmut-cicd-stats.json]
+    python3 tools/mutation_floor.py [mutants/mutmut-cicd-stats.json]
 
 It ends with 0 when the share of mutants killed is at or above the floor, 1 when
 it is under the floor or the run cannot be trusted, and 2 when the summary
@@ -46,7 +46,9 @@ def verdict(stats, floor=FLOOR):
         return False, "no mutants were made, so the tests were not tried against anything"
     rate = (1000 * killed // total) / 10              # never rounded up: 79.99% must not read as 80.0%
     told = f"{killed} of {total} mutants killed ({rate:.1f}%)"
-    if 100 * killed < Fraction(floor) * total:        # a float here would round, and counts past its range would be an error
+    # Exact: a float in the sum would round, and counts past its range would be an error. The floor is taken as it
+    # is written (99.9), not as the nearest number a float can hold, which can be a hair above it.
+    if 100 * killed < Fraction(str(floor)) * total:
         return False, f"{told}, under the floor of {floor:g}%"
     return True, f"{told}; the floor is {floor:g}%"
 
@@ -55,7 +57,7 @@ def main(argv=None):
     """Read one summary file and say whether it meets the floor -> the exit status."""
     args = sys.argv[1:] if argv is None else list(argv)
     if len(args) > 1:
-        print("usage: python tools/mutation_floor.py [summary.json]", file=sys.stderr)
+        print("usage: python3 tools/mutation_floor.py [summary.json]", file=sys.stderr)
         return 2
     path = Path(args[0]) if args else SUMMARY
     try:

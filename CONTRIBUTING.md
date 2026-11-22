@@ -70,18 +70,37 @@ python3 tools/mutation_floor.py
 
 # the package as it would be installed: the wheel is built, installed alone into
 # a clean environment, and tested away from the source
+(
+set -e
+rm -rf build src/wrong_person.egg-info
 check="$(mktemp -d)"
 python3 -m build --wheel --outdir "$check/dist"
 python3 -m venv "$check/clean"
 "$check/clean/bin/python" -m pip install --no-index --no-deps "$check"/dist/wrong_person-*.whl
 mkdir "$check/apart"
 cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$check/apart/"
-(cd "$check/apart" && "$check/clean/bin/python" -m unittest discover -s tests)
+cd "$check/apart"
+test ! -e src
+"$check/clean/bin/python" - <<'PY'
+import pathlib, sys, wrong_person
+home = pathlib.Path(sys.prefix).resolve()
+found = pathlib.Path(wrong_person.__file__).resolve()
+if home not in found.parents:
+    sys.exit(f"the package came from {found}, not from the installed wheel in {home}")
+print(f"testing the installed package at {found}")
+PY
+"$check/clean/bin/python" -m unittest discover -s tests
+)
 ```
 
-The last block is what the `package` job runs, with a folder of your own in
-place of the runner's. Building the wheel alone proves little: the job is there
-for a wheel that builds and then lacks its data file.
+The last block is what the `package` job runs, line for line, with a folder of
+your own in place of the runner's. The brackets and `set -e` stop it at the
+first line that fails, as the runner does. The `rm` is there because GitHub
+starts from a fresh copy and your folder does not: a build leaves `build/` and
+`src/wrong_person.egg-info/` behind (git ignores both), and the next build packs
+what they remember, so a wheel could pass here with a file in it that GitHub's
+wheel would lack. Building the wheel alone proves little: the job is there for
+a wheel that builds and then lacks its data file.
 
 If you change `.github/workflows/checks.yml`, run
 [`actionlint`](https://github.com/rhysd/actionlint) on it by hand as well. It is
@@ -114,14 +133,16 @@ as well.
   downloaded or a job cut off by its time limit. Run the job again: "Re-run
   failed jobs" on the run's page, for anyone who may write to the repository.
   Otherwise ask the maintainer.
-- **`private-words` names a file as it is now, or the pull request's title,
-  description or branch.** Take the word out: a new commit for a file, an edit
-  for the title or the description (an edit starts a new run by itself), a new
-  branch and a new pull request for a branch name.
-- **`private-words` names a commit, or an object in the history.** A later
-  commit cannot clear it. The earlier commit is still part of the branch and
-  still holds the word, so the branch has to be made again without that
-  commit and pushed in place of the old one. Ask the maintainer first.
+- **`private-words` names the pull request's title, description or branch.**
+  Take the word out: an edit for the title or the description (an edit starts
+  a new run by itself), a new branch and a new pull request for a branch name.
+- **`private-words` names a file, a commit, or an object in the history.** A
+  later commit cannot clear it. A file that holds the word was committed, so
+  the run names the file and an object in the history as well, and a new
+  commit that takes the word out clears only the first of the two. The
+  earlier commit is still part of the branch and still holds the word, so the
+  branch has to be made again without that commit and pushed in place of the
+  old one. Ask the maintainer first.
 - **`private-words` says it cannot vouch.** Nothing was found: the scan could
   not be made, and the one sentence it prints says why.
 - **`All checks` is red.** It is red whenever another job failed, was stopped,
@@ -145,7 +166,8 @@ For the maintainer:
   rewritten, with the protection lifted for that one push, or the pattern is
   wrong and is set again.
 - **A pull request from a fork** is not given the secret, so its
-  `private-words` job skips. Before merging it, fetch it and check it out
+  `private-words` job searches for nothing: it says "skipped" and passes.
+  Before merging it, fetch it and check it out
   (`git fetch origin pull/<number>/head`, then `git switch --detach FETCH_HEAD`).
   Put `main`'s copy of the scan somewhere outside the repository
   (`git show main:tools/private_words.py > "$copy"`, for a path of your own) and
@@ -181,8 +203,9 @@ held as a repository secret.
   The pull request's title, description and branch name.
 - **What it does not read.** Other branches, and tags. The commits of a pull
   request that was closed without being merged, and the earlier wordings of a
-  title or description that was edited. Issues and comments. A signed tag's own
-  words, where a commit merged one. Text that is not UTF-8, except that UTF-16
+  title or description that was edited. Issues and comments. The signature of
+  a signed commit, and a signed tag's own words, where a commit merged one.
+  Text that is not UTF-8, except that UTF-16
   and UTF-32 are read for words in plain letters. Compressed files, office
   documents, PDFs and images. Submodules, and files kept in Git LFS. A word in
   any of these has to be caught by a person.

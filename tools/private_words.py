@@ -122,9 +122,11 @@ def git(repo, *args, stdin=None):
         raise CannotVouch(f"this git command did not answer within {GIT_SECONDS} seconds: {shlex.join(command)}") from None
     except OSError:
         raise CannotVouch("git could not be run here") from None
-    if done.returncode:
-        raise CannotVouch(f"this git command ended with status {done.returncode}; run it by hand in this folder to see why: "
-                          f"{shlex.join(command)}")
+    if done.returncode < 0:                           # stopped from outside, so git has nothing more to say by hand
+        raise CannotVouch(f"this git command was killed (signal {-done.returncode}): {shlex.join(command)}")
+    if done.returncode:                               # a command that is fed a list would only wait for one by hand
+        by_hand = "; run it by hand in this folder to see why" if stdin is None else ""
+        raise CannotVouch(f"this git command ended with status {done.returncode}{by_hand}: {shlex.join(command)}")
     return done.stdout
 
 
