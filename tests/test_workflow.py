@@ -525,7 +525,7 @@ class Floors(unittest.TestCase):
     def test_the_page_has_a_row_for_every_job(self):
         page = CONTRIBUTING.read_text(encoding="utf-8")
         table_of_jobs = page.split("\n## What GitHub runs\n", 1)[1].split("\n## ", 1)[0]
-        self.assertTrue(re.findall(r"^\| `([^`]+)` \| .+ \|$", table_of_jobs, re.M))
+        self.assertEqual(re.findall(r"^\| `([^`]+)` \| .+ \|$", table_of_jobs, re.M), [*JOBS[:-1], "All checks"])
 
     def test_the_page_gives_the_faults_jobs_command_for_a_contributor_to_run(self):
         """Without `--no-skips`: on a contributor's computer a test that cannot run there is passed over, and the page says so."""

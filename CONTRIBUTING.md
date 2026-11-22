@@ -211,7 +211,7 @@ on every push to `main` (`.github/workflows/checks.yml`):
 | `package` | The built wheel, installed alone into a clean environment and tested away from the source, passes the tests, so it carries its data file |
 | `mutation` | The share of mutants killed is at or above the floor |
 | `private-words` | The scan finds none of the private words in the files, in the history behind the change, or in the pull request's own words (below: what it reads and what it does not) |
-| `faults` | Every planted fault makes the test it names fail, and none of those tests was skipped |
+| `faults` | Each planted fault makes the test it names fail, and none of those tests was skipped |
 | `All checks` | Every job above succeeded; this is the one a merge waits for |
 
 `tests/test_workflow.py` holds what each job runs and the rules the workflow
