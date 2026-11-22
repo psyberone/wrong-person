@@ -139,7 +139,7 @@ jobs:
         # It reads the pull request's title, body and branch name for itself, from
         # the file the runner writes the event to (GITHUB_EVENT_PATH).
         env:
-          PRIVATE_WORDS: ${{ secrets.PRIVATE_WORDS }}
+          PRIVATE_WORDS: ${{ secrets.NO_SUCH_SECRET }}
           PRIVATE_WORDS_FROM_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
         run: python3 tools/private_words.py
 
