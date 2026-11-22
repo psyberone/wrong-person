@@ -125,6 +125,12 @@ FAULTS = [
     ("N35 lists that hold no fault are not refused as such",
      TESTS + "Refusals.test_a_repository_with_no_lists_is_refused",
      [(PF, '    if not faults:\n        raise CannotVouch(f"there is no fault to plant: no list under {LISTS}/ holds one")\n', "")]),
+    ("N40 a label may run over more than one line",
+     TESTS + "Refusals.test_a_label_or_a_file_name_cannot_start_a_line_of_its_own_in_what_is_printed",
+     [(PF, "or not label.split() or not label.isprintable():", "or not label.split():")]),
+    ("N41 a file's name may run over more than one line",
+     TESTS + "Refusals.test_a_label_or_a_file_name_cannot_start_a_line_of_its_own_in_what_is_printed",
+     [(PF, "        if not file.isprintable():", "        if False:")]),
     # ---- the arguments
     ("N36 every fault is planted whatever was asked for",
      TESTS + "Choosing.test_only_the_faults_whose_labels_begin_as_asked_are_planted",

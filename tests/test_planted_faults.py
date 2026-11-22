@@ -304,6 +304,14 @@ class Refusals(SmallRepository):
             with self.subTest(entry=entry):
                 self.cannot_vouch(lists={"shapes.py": f"FAULTS = {[entry]!r}\n"}, said=["tools/faults/shapes.py"])
 
+    def test_a_label_or_a_file_name_cannot_start_a_line_of_its_own_in_what_is_printed(self):
+        """What is printed goes into GitHub's log, and there a line that begins with two colons is a command to the runner."""
+        for entry in [("T38 a label\n::error::of two lines", TRIANGLE, [A_FOURTH_SIDE]),
+                      ("T38 a file name of two lines", TRIANGLE, [("src/shapes.py\n::error::of two lines", '"triangle": 3', "x")])]:
+            with self.subTest(entry=entry[0]):
+                out, err = self.cannot_vouch(lists={"shapes.py": f"FAULTS = {[entry]!r}\n"}, said=["tools/faults/shapes.py"])
+                self.assertNotIn("::error::", out + err)
+
     def test_a_list_with_no_faults_in_it_is_refused(self):
         self.cannot_vouch(lists={"shapes.py": "FAULTS = []\n"}, said=["there is no fault to plant"])
         self.cannot_vouch(lists={"shapes.py": "MUTANTS = []\n"}, said=["tools/faults/shapes.py", "FAULTS"])

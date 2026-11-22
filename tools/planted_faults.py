@@ -96,8 +96,8 @@ def a_fault(entry, where):
     if not isinstance(entry, (tuple, list)) or len(entry) != 3:
         refuse("a fault is a label, the full name of one test, and a list of edits")
     label, test, edits = entry
-    if not isinstance(label, str) or not label.split():
-        refuse("a fault's label is some words")
+    if not isinstance(label, str) or not label.split() or not label.isprintable():
+        refuse("a fault's label is one line of words")
     name = label.split()[0]
     if not isinstance(test, str) or not A_TEST.fullmatch(test):
         refuse(f"{name}: a test is named in full, as file.Class.test")
@@ -109,6 +109,8 @@ def a_fault(entry, where):
         file, old, new = edit
         if not isinstance(file, str) or not isinstance(new, str) or not (old is None or isinstance(old, str)):
             refuse(f"{name}: an edit is a file, the text to replace (or None, to add the file), and the text that replaces it")
+        if not file.isprintable():                    # a name is printed, and must not start a line of its own in a log
+            refuse(f"{name}: a file is named on one line")
         path = PurePosixPath(file)
         if not path.parts or path.is_absolute() or ".." in path.parts or "\\" in file:
             refuse(f"{name}: {file} is not a path inside this repository")
