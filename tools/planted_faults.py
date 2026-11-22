@@ -3,8 +3,9 @@
     python3 tools/planted_faults.py [--only LABEL] [--no-skips] [--check]
 
 A planted fault (a hand-written mutant) is one small, wrong edit to a file of
-this repository. The lists under tools/faults/ hold them, each beside the full
-name of the one test that is meant to catch it. This script copies the
+this repository: some text that is found exactly once is replaced, or a file
+that is not there is added. The lists under tools/faults/ hold them, each
+beside the full name of the one test that is meant to catch it. This script copies the
 repository to a scratch folder and sees that the whole suite passes there. Then,
 for each fault, it plants the fault in the copy, runs that fault's test, and
 takes the fault out again. The repository itself is never written to.
@@ -38,7 +39,8 @@ A_TEST = re.compile(r"\w+\.\w+\.\w+")                 # a test's full name: file
 ANSWER = "planted-faults-answer:"                     # the line a child process gives its answer on
 FAILED, PASSED, SKIPPED, NOT_LOADED = "failed", "passed", "skipped", "not loaded"
 
-Fault = namedtuple("Fault", "label test edits")       # edits: [(file, the text to replace, what replaces it), ...]
+Fault = namedtuple("Fault", "label test edits")       # edits: [(file, the text to replace, what replaces it), ...];
+                                                      # None for the text to replace adds the file
 
 # Run in the copy, in a Python of its own. "names" answers with the names that are not one test each;
 # "run" runs the one test named and answers with what became of it. A test is run inside a suite, so
@@ -102,13 +104,15 @@ def a_fault(entry, where):
     if not isinstance(edits, (tuple, list)) or not edits:
         refuse(f"{name}: a fault has at least one edit")
     for edit in edits:
-        if not isinstance(edit, (tuple, list)) or len(edit) != 3 or not all(isinstance(part, str) for part in edit):
+        if not isinstance(edit, (tuple, list)) or len(edit) != 3:
             refuse(f"{name}: an edit is a file, the text to replace, and the text that replaces it")
         file, old, new = edit
+        if not isinstance(file, str) or not isinstance(new, str) or not (old is None or isinstance(old, str)):
+            refuse(f"{name}: an edit is a file, the text to replace (or None, to add the file), and the text that replaces it")
         path = PurePosixPath(file)
         if not path.parts or path.is_absolute() or ".." in path.parts or "\\" in file:
             refuse(f"{name}: {file} is not a path inside this repository")
-        if not old or old == new:
+        if old in ("", new):
             refuse(f"{name}: an edit replaces some text with other text")
     return Fault(label, test, [tuple(edit) for edit in edits])
 
@@ -157,29 +161,46 @@ def copy_of(root, lab):
     return copied
 
 
+def text_of(path):
+    """What a file holds, or None if it is not there or does not hold text."""
+    try:
+        return path.read_bytes().decode("utf-8") if path.is_file() else None
+    except UnicodeDecodeError:
+        return None
+
+
 def plant(lab, fault):
-    """Make a fault's edits in the lab -> what each file it changed held before. If one edit does not fit, none is left in."""
+    """Make a fault's edits in the lab -> what each file held before (None for a file the fault added).
+
+    If one edit does not fit the lab as it stands, none is left in.
+    """
     saved = {}
     for file, old, new in fault.edits:
         path = lab / file
-        try:
-            text = path.read_bytes().decode("utf-8") if path.is_file() else None
-        except UnicodeDecodeError:
-            text = None
-        if text is None or text.count(old) != 1:
+        before = text_of(path)
+        if old is None:
+            why = "it is there already" if path.exists() or path.is_symlink() else "" if path.parent.is_dir() else "its folder is not there"
+            why = why and f"{file} cannot be added: {why}"
+        elif before is None:
+            why = f"{file} is not a file of this repository that holds text"
+        else:
+            found = before.count(old)
+            why = "" if found == 1 else f"the text to replace is found {found} times in {file}, and must be found once"
+        if why:
             put_back(saved)
-            if text is None:
-                raise CannotVouch(f"{file} is not a file of this repository that holds text")
-            raise CannotVouch(f"the text to replace is found {text.count(old)} times in {file}, and must be found once")
-        saved.setdefault(path, text)
-        path.write_bytes(text.replace(old, new).encode("utf-8"))
+            raise CannotVouch(why)
+        saved.setdefault(path, before)
+        path.write_bytes((new if old is None else before.replace(old, new)).encode("utf-8"))
     return saved
 
 
 def put_back(saved):
-    """Take a fault out again: each file it changed holds what it held before."""
+    """Take a fault out again: each file it changed holds what it held before, and a file it added is gone."""
     for path, text in saved.items():
-        path.write_bytes(text.encode("utf-8"))
+        if text is None:
+            path.unlink()
+        else:
+            path.write_bytes(text.encode("utf-8"))
 
 
 def python(lab, *args, seconds):
@@ -271,6 +292,9 @@ def tried(root, faults, check):
             if (lab / name).read_bytes() != (root / name).read_bytes():
                 raise CannotVouch(f"{name} in the copy no longer matches the repository, so a test wrote to it or the "
                                   "repository changed during the run")
+        for name in sorted(path.relative_to(lab).as_posix() for path in lab.rglob("*") if not path.is_dir()):
+            if name not in names:
+                raise CannotVouch(f"{name} is in the copy and not in the repository, so a test left it there")
     return counts[FAILED], counts[PASSED], counts[SKIPPED], counts[None]
 
 
@@ -308,6 +332,9 @@ def main(argv=None, root=None):
                               + ", and here no test may be skipped")
     except CannotVouch as error:
         print(f"planted faults: cannot vouch: {error}", file=sys.stderr)
+        return 2
+    except OSError as error:                          # uncaught, Python would end with 1, which here means that a fault survived
+        print(f"planted faults: cannot vouch: the copy could not be worked in ({type(error).__name__})", file=sys.stderr)
         return 2
     return 1 if survived else 0
 

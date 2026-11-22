@@ -38,16 +38,23 @@ class Sides(unittest.TestCase):
 
     def test_a_circle_cannot_be_counted_here(self):
         self.skipTest("no circles on this computer")
+
+    def test_shapes_is_the_only_module(self):
+        import pathlib
+        source = pathlib.Path(__file__).resolve().parents[1] / "src"
+        self.assertEqual(sorted(path.name for path in source.iterdir()), ["shapes.py"])
 '''
 TRIANGLE = "test_shapes.Sides.test_a_triangle_has_three_sides"
 SQUARE = "test_shapes.Sides.test_a_square_has_four_sides"
 CIRCLE = "test_shapes.Sides.test_a_circle_cannot_be_counted_here"
+ONE_MODULE = "test_shapes.Sides.test_shapes_is_the_only_module"
 SHAPES = "src/shapes.py"
 A_FOURTH_SIDE = (SHAPES, '"triangle": 3', '"triangle": 4')
 A_FIFTH_SIDE = (SHAPES, '"square": 4', '"square": 5')
 KILLED = ("T1 a triangle is given a fourth side", TRIANGLE, [A_FOURTH_SIDE])
 SURVIVOR = ("T2 a triangle is given a fourth side and the square's test is asked", SQUARE, [A_FOURTH_SIDE])
 SKIPPED = ("T3 a triangle is given a fourth side and a test that skips is asked", CIRCLE, [A_FOURTH_SIDE])
+A_SECOND_MODULE = ("T30 a second module appears", ONE_MODULE, [("src/circles.py", None, "SIDES = {}\n")])
 
 
 def load():
@@ -143,7 +150,7 @@ class Verdicts(SmallRepository):
 
     def test_the_suite_is_run_first_and_its_size_is_said(self):
         _, out, _ = self.planted(KILLED)
-        self.assertLess(out.index("no fault planted: 3 tests ran and passed in the copy"), out.index("killed"))
+        self.assertLess(out.index("no fault planted: 4 tests ran and passed in the copy"), out.index("killed"))
 
     def test_a_fault_of_two_edits_has_both_planted(self):
         """Either edit alone leaves this test passing: only with both does the sum of the sides change."""
@@ -165,6 +172,41 @@ class Verdicts(SmallRepository):
         status, out, _ = self.planted(KILLED, ("T8 the square's name is asked of the triangle's test", TRIANGLE, [A_FIFTH_SIDE]))
         self.assertEqual(status, 1)
         self.assertIn("SURVIVED      T8", out)
+
+
+class AddingAFile(SmallRepository):
+    """An edit with None for the text to replace adds a file that is not there."""
+
+    def test_a_fault_may_add_a_file(self):
+        status, out, err = self.planted(A_SECOND_MODULE)
+        self.assertEqual(status, 0, out + err)
+        self.assertIn("killed        T30 a second module appears", out)
+
+    def test_the_file_is_taken_away_again_before_the_next_fault(self):
+        """Were the new file left in, the same test would fail again and the next fault would be counted as killed."""
+        status, out, _ = self.planted(A_SECOND_MODULE, ("T31 a square is given a fifth side", ONE_MODULE, [A_FIFTH_SIDE]))
+        self.assertEqual(status, 1)
+        self.assertIn("killed        T30", out)
+        self.assertIn("SURVIVED      T31", out)
+
+    def test_a_file_that_is_there_already_cannot_be_added(self):
+        self.cannot_vouch(("T32 the module is added again", TRIANGLE, [(SHAPES, None, "SIDES = {}\n")]),
+                          said=["T32", "src/shapes.py cannot be added: it is there already"])
+        self.assertEqual((self.repo / SHAPES).read_text(encoding="utf-8"), MODULE)
+
+    def test_a_file_is_added_only_to_a_folder_that_is_there(self):
+        self.cannot_vouch(("T33 a module in a folder of its own", TRIANGLE, [("src/more/circles.py", None, "SIDES = {}\n")]),
+                          said=["T33", "src/more/circles.py cannot be added: its folder is not there"])
+
+    def test_a_file_added_and_then_edited_is_still_taken_away(self):
+        both = [("src/circles.py", None, "SIDES = {}\n"), ("src/circles.py", "{}", '{"circle": 1}')]
+        status, out, err = self.planted(("T34 a second module, written in two steps", ONE_MODULE, both), A_SECOND_MODULE)
+        self.assertEqual(status, 0, out + err)
+        self.assertIn("2 faults: 2 killed", out)
+
+    def test_a_file_is_not_added_outside_the_repository(self):
+        self.cannot_vouch(("T35 a file elsewhere", TRIANGLE, [("../added.txt", None, "written\n")]), said=["T35", "is not a path inside this repository"])
+        self.assertFalse((self.repo.parent / "added.txt").exists())
 
 
 class Skips(SmallRepository):
@@ -246,7 +288,9 @@ class Refusals(SmallRepository):
     def test_an_entry_that_is_not_a_fault_is_refused_and_its_list_is_named(self):
         for entry in [("T17 no edits", TRIANGLE, []), ("T17 two parts", TRIANGLE), ("", TRIANGLE, [A_FOURTH_SIDE]),
                       ("T17 nothing to replace", TRIANGLE, [(SHAPES, "", "x")]), ("T17 no change", TRIANGLE, [(SHAPES, "a", "a")]),
-                      ("T17 an edit of two parts", TRIANGLE, [(SHAPES, "a")]), ("T17 a number", TRIANGLE, [(SHAPES, 3, 4)]), "T17 only a label"]:
+                      ("T17 an edit of two parts", TRIANGLE, [(SHAPES, "a")]), ("T17 a number", TRIANGLE, [(SHAPES, 3, 4)]), "T17 only a label",
+                      ("T17 a new file that holds a number", TRIANGLE, [("src/circles.py", None, 4)]),
+                      ("T17 nothing replaced by nothing", TRIANGLE, [(SHAPES, None, None)])]:
             with self.subTest(entry=entry):
                 self.cannot_vouch(lists={"shapes.py": f"FAULTS = {[entry]!r}\n"}, said=["tools/faults/shapes.py"])
 
@@ -288,6 +332,19 @@ class Refusals(SmallRepository):
         status, out, err = self.planted(KILLED)
         self.assertEqual(status, 2, out + err)
         self.assertIn("README.md in the copy no longer matches the repository", err)
+
+    def test_a_file_that_a_test_left_in_the_copy_is_not_trusted(self):
+        """A file left behind could be what fails the next fault's test, and that would be counted as a kill."""
+        self.write("tests/test_shapes.py", TESTS + "\n    def test_that_leaves_notes(self):\n        import pathlib\n"
+                   "        pathlib.Path('notes.txt').write_text('left behind\\n')\n")
+        status, out, err = self.planted(KILLED)
+        self.assertEqual(status, 2, out + err)
+        self.assertIn("notes.txt is in the copy and not in the repository", err)
+
+    def test_a_disk_that_fails_is_not_read_as_a_survivor(self):
+        """Python itself ends with 1 when an error is not caught, and 1 here means that a fault survived."""
+        with mock.patch.object(shutil, "copy2", side_effect=OSError("no room left")):
+            self.cannot_vouch(KILLED, said=["the copy could not be worked in (OSError)"])
 
     def test_an_argument_it_does_not_know_is_refused(self):
         for args in (["--all"], ["shapes"], ["--only"], ["--only", "T1", "--only"]):
@@ -336,7 +393,7 @@ class WhatIsCopied(SmallRepository):
                    "        self.assertLess(shapes.sides('triangle'), shapes.sides('square'))\n")
         status, out, err = self.planted(("T23 a new test file", "test_more_shapes.More.test_a_triangle_has_fewer_sides_than_a_square", [A_FOURTH_SIDE]))
         self.assertEqual(status, 0, out + err)
-        self.assertIn("no fault planted: 4 tests ran and passed", out)
+        self.assertIn("no fault planted: 5 tests ran and passed", out)
 
     def test_a_file_git_ignores_is_not_copied(self):
         """The ignored file here is a test that fails; were it copied, the suite would not pass with no fault planted."""
@@ -344,7 +401,7 @@ class WhatIsCopied(SmallRepository):
         self.write("tests/test_scratch.py", "import unittest\n\n\nclass Scratch(unittest.TestCase):\n    def test_fails(self):\n        self.fail('not for the copy')\n")
         status, out, err = self.planted(KILLED)
         self.assertEqual(status, 0, out + err)
-        self.assertIn("no fault planted: 3 tests ran and passed", out)
+        self.assertIn("no fault planted: 4 tests ran and passed", out)
 
     def test_a_file_deleted_but_not_yet_taken_out_of_git_is_left_out(self):
         (self.repo / "README.md").unlink()
