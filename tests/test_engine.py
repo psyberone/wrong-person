@@ -436,7 +436,8 @@ class WholeCase(unittest.TestCase):
         more = lambda extra: text.rstrip()[:-1] + ", " + extra + "}"
         self.assertEqual(json.loads(more('"rules": []'))["rules"], [])      # JSON itself keeps the last and says nothing
         for key, extra in (("rules", '"rules": []'), ("names", '"names": []'), ("shape", '"shape": [1, 2, 2, 3]'),
-                           ("killer", '"killer": "Maxwell", "killer": "Michael"')):
+                           ("killer", '"killer": "Maxwell", "killer": "Michael"'),
+                           ("shape", '"rules": [], "shape": [1, 2, 2, 3]')):    # two at once: the one the file gives first
             with self.assertRaises(ValueError) as refused:
                 e.case_from_json(more(extra))
             self.assertEqual(str(refused.exception), f"a saved case holds each key once, got {key!r} twice")
