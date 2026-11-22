@@ -45,6 +45,9 @@ testpaths = ["tests"]
 source_paths = ["src/"]
 pytest_add_cli_args_test_selection = ["tests/"]
 also_copy = [
-    "README.md",   # tests/test_readme.py runs the README's example
-    "tools/",      # tests/test_tools.py runs the mutation-floor script
+    "README.md",         # tests/test_readme.py runs the README's example
+    "tools/",            # tests/test_tools.py and tests/test_private_words.py run the two scripts
+    ".github/",          # tests/test_workflow.py reads the workflow,
+    "CONTRIBUTING.md",   # this page,
+    "pyproject.toml",    # and this file
 ]

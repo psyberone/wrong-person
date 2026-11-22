@@ -1,5 +1,5 @@
 # The checks every change must pass before it merges. CONTRIBUTING.md says what
-# each one proves and how to run it on your own machine.
+# each one proves and how to run it on your own computer.
 #
 # Rules this file keeps:
 #   - The token it runs with can only read the repository.
@@ -7,7 +7,10 @@
 #   - Nothing a person typed (a title, a body, a branch name) is ever written into
 #     a script, and none of it is put in a step's `env:` either, because the
 #     runner prints every `env:` value into the log.
-#   - The one job that holds a secret installs nothing and runs one script.
+#   - The one job that is given a secret installs nothing, and the one step that
+#     holds it runs one script.
+#   - tests/test_workflow.py holds these rules and what each job runs. A change
+#     here has to be made there as well, on purpose.
 name: Checks
 
 on:
@@ -20,7 +23,8 @@ on:
 permissions:
   contents: read
 
-# A newer push to a pull request stops the older run. A run on main is never stopped.
+# A newer push to a pull request, or an edit of its title or description, stops
+# the older run. A run on main is never stopped.
 concurrency:
   group: checks-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -90,7 +94,7 @@ jobs:
       - name: Run the tests against the installed wheel, away from the source
         run: |
           mkdir "$RUNNER_TEMP/apart"
-          cp -R tests tools README.md "$RUNNER_TEMP/apart/"
+          cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$RUNNER_TEMP/apart/"
           cd "$RUNNER_TEMP/apart"
           test ! -e src
           "$RUNNER_TEMP/clean/bin/python" - <<'PY'
@@ -131,9 +135,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0     # the whole history, since every commit is public
+      - name: Fetch the rest of the history
+        # Every commit is public, so the scan reads every commit. The checkout
+        # above brings one. Asked for the whole history, it would print each
+        # branch's name into this log, and a pull request's branch name is one
+        # of the things the scan reads. This asks for the one commit by its
+        # hash, with all that is behind it, and prints nothing.
+        run: git fetch --quiet --no-tags --depth=2147483647 origin "$(git rev-parse HEAD)"
       - name: Look for the private words in the files, the history and the pull request
         # The runner's own Python: this job installs nothing and uses no other action.
+        # -I keeps Python from running a file beside the script in place of a module,
+        # and from reading settings out of the environment.
         # The script never prints what matched, and it fails if it has no pattern,
         # unless the pull request comes from a fork, which is never given secrets.
         # It reads the pull request's title, body and branch name for itself, from
@@ -141,7 +153,7 @@ jobs:
         env:
           PRIVATE_WORDS: ${{ secrets.PRIVATE_WORDS }}
           PRIVATE_WORDS_FROM_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-        run: python3 tools/private_words.py
+        run: python3 -I tools/private_words.py
 
   all-checks:
     name: All checks
