@@ -138,10 +138,13 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m coverage run -m unittest dis
 python3 -m coverage report
 ```
 
-The tests need nothing but Python. The coverage commands need the `coverage`
-package, which is not part of the standard library:
-`python3 -m pip install "coverage[toml]"`. The `toml` extra matters only on
-Python 3.10.
+The tests need Python and git, and nothing else. The coverage commands need the
+`coverage` package, which is not part of the standard library:
+`python3 -m pip install --group dev` installs it, at the version this project is
+measured with (pip 25.1 or newer).
+
+The standard the code is held to, what GitHub checks on every change, and how a
+change is reviewed are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
