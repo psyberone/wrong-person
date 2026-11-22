@@ -11,6 +11,12 @@ square brackets is the name a fault had in the review it came from: G1 to G5
 are the reviewers of the five gates, and `own` marks a fault the coding
 assistant planted against its own fix. Where several tests fail for a fault,
 the test named is the one whose name says what the fault breaks.
+
+Three faults are the exception (E035, E099, E100). What they break depends on
+chance: the order Python walks a set in, or a hash, both of which change from
+one run to the next. The test whose name says what is broken compares one order
+with another and so passes on some runs: 1 in 24 for E099. These three name the
+test that takes the chance away by fixing the hash seed.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -345,11 +351,12 @@ FAULTS = [
     ("E098 [G4w-K25] the riddle file is read as utf-8-sig",
      "test_engine.Wording.test_every_refusal_of_a_file_starts_with_its_name",
      [(W, 'path.read_text(encoding="utf-8")', 'path.read_text(encoding="utf-8-sig")')]),
+    # The next two depend on chance, like E035, and name the same test as it does (see the top of this file).
     ("E099 [G4w-K60] named people are walked as a set",
-     "test_engine.Semantics.test_named_people_come_in_the_order_given",
+     "test_engine.Properties.test_same_inputs_same_answer_in_every_run",
      [(E, "        for name in named:\n", "        for name in set(named):\n")]),
     ("E100 [G4w-K68] decoys come back in the hash order of their names",
-     "test_engine.WholeCase.test_decoys_come_back_in_board_order", [
+     "test_engine.Properties.test_same_inputs_same_answer_in_every_run", [
         (E, "    return [i for i in survivors(list(rules)[:-1], board) if i != killer]",
             "    found = [i for i in survivors(list(rules)[:-1], board) if i != killer]\n"
             "    return sorted(found, key=lambda i: hash(board.names[i]))")]),

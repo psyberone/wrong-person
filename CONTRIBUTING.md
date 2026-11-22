@@ -176,6 +176,13 @@ it killed. A fault must leave its test able to run and to finish: one that
 makes the test wait for ever, or breaks what the test sets up first, cannot be
 judged.
 
+A fault must be killed on every run, not on most. If what it breaks depends on
+chance, such as the order Python walks a set in, which changes from one run to
+the next, a test that compares one order with another will pass now and then.
+Name a test that takes the chance away. For the package that is
+`test_same_inputs_same_answer_in_every_run`, which runs the code under three
+fixed hash seeds.
+
 A Mac's disk does not tell capital letters from small ones in a file name. A
 fault that only changes the case of a file name can survive there and be killed
 on GitHub.
@@ -235,7 +242,9 @@ as well.
 - **`faults` says a fault SURVIVED.** The test it names passed with the fault
   in place, so something that test was holding is no longer held. Plant that one
   fault here (`python3 tools/planted_faults.py --only` and its label) and make
-  the test hold it again.
+  the test hold it again. If the fault is killed when you run it again, and no
+  line it touches was changed, what it breaks depends on chance, and it names
+  the wrong test ([above](#the-planted-faults)).
 - **`faults` says it cannot vouch.** Most often a fault cannot be planted: the
   change touched the line it points at, or renamed its test. The run names each
   one; aim it at the new line ([above](#the-planted-faults)). It also says so
