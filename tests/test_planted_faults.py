@@ -167,6 +167,16 @@ class Verdicts(SmallRepository):
         self.assertEqual(status, 0, out + err)
         self.assertIn("killed        T7", out)
 
+    def test_a_fault_caught_by_one_case_of_a_test_is_killed(self):
+        """A test that tries several cases reports each failing case under a name of its own, longer than the test's."""
+        self.write("tests/test_shapes.py", TESTS + "\n    def test_each_shape_has_its_sides(self):\n"
+                   "        for name, count in (('triangle', 3), ('square', 4)):\n"
+                   "            with self.subTest(name=name):\n"
+                   "                self.assertEqual(shapes.sides(name), count)\n")
+        status, out, err = self.planted(("T36 a fault that one case catches", "test_shapes.Sides.test_each_shape_has_its_sides", [A_FOURTH_SIDE]))
+        self.assertEqual(status, 0, out + err)
+        self.assertIn("killed        T36", out)
+
     def test_a_fault_is_taken_out_before_the_next_is_planted(self):
         """Were the fourth side left in, the triangle's test would fail again and the next fault would be counted as killed."""
         status, out, _ = self.planted(KILLED, ("T8 the square's name is asked of the triangle's test", TRIANGLE, [A_FIFTH_SIDE]))
@@ -295,14 +305,14 @@ class Refusals(SmallRepository):
                 self.cannot_vouch(lists={"shapes.py": f"FAULTS = {[entry]!r}\n"}, said=["tools/faults/shapes.py"])
 
     def test_a_list_with_no_faults_in_it_is_refused(self):
-        self.cannot_vouch(lists={"shapes.py": "FAULTS = []\n"}, said=["no fault"])
+        self.cannot_vouch(lists={"shapes.py": "FAULTS = []\n"}, said=["there is no fault to plant"])
         self.cannot_vouch(lists={"shapes.py": "MUTANTS = []\n"}, said=["tools/faults/shapes.py", "FAULTS"])
 
     def test_a_list_that_cannot_be_read_is_refused_and_named(self):
         self.cannot_vouch(lists={"shapes.py": "FAULTS = [\n"}, said=["tools/faults/shapes.py could not be read"])
 
     def test_a_repository_with_no_lists_is_refused(self):
-        self.cannot_vouch(lists={}, said=["no fault"])
+        self.cannot_vouch(lists={}, said=["there is no fault to plant: no list under tools/faults/ holds one"])
 
     def test_a_folder_that_git_does_not_know_is_refused(self):
         shutil.rmtree(self.repo / ".git")
@@ -325,6 +335,16 @@ class Refusals(SmallRepository):
         self.assertEqual(status, 2, out + err)
         self.assertIn("CANNOT SAY    T19", out)
         self.assertIn("could not be loaded with the fault planted", out)
+
+    def test_a_fault_that_breaks_what_a_test_needs_set_up_is_not_a_kill(self):
+        """The test named never ran, so nothing is known about it."""
+        self.write("tests/test_set_up.py", "import unittest\n\nimport shapes\n\n\nclass SetUp(unittest.TestCase):\n"
+                   "    @classmethod\n    def setUpClass(cls):\n        cls.triangle = {3: 'three sides'}[shapes.sides('triangle')]\n\n"
+                   "    def test_a_square_has_four_sides(self):\n        self.assertEqual(shapes.sides('square'), 4)\n")
+        status, out, err = self.planted(("T37 the set-up breaks", "test_set_up.SetUp.test_a_square_has_four_sides", [A_FOURTH_SIDE]))
+        self.assertEqual(status, 2, out + err)
+        self.assertIn("CANNOT SAY    T37", out)
+        self.assertIn("gave no verdict with the fault planted", out)
 
     def test_a_copy_that_a_test_wrote_to_is_not_trusted(self):
         self.write("tests/test_shapes.py", TESTS + "\n    def test_that_scribbles(self):\n        import pathlib\n"
