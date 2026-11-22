@@ -1,4 +1,4 @@
-"""A stand-in for code that nobody tested. It exists only to prove that the coverage check can fail."""
+"""A stand-in for code that is run by a test which checks nothing. It exists only to prove that the mutation check can fail."""
 
 def step_00(a, b):
     total = a * 2 + b
