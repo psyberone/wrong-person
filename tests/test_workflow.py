@@ -245,7 +245,7 @@ def words_of(page):
 
 
 def load(script):
-    """One of the two scripts in tools/ as a module; they live outside the package, so they are loaded by path."""
+    """One of the scripts in tools/ as a module; they live outside the package, so they are loaded by path."""
     spec = importlib.util.spec_from_file_location(script.stem, script)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -521,6 +521,19 @@ class Floors(unittest.TestCase):
         for needed in ('"README.md"', '"CONTRIBUTING.md"', '"pyproject.toml"', '"tools/"', '".github/"'):
             self.assertIn(needed, " ".join(table(self.settings, "tool.mutmut")), needed)
         self.assertIn('cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$RUNNER_TEMP/apart/"\n', COMMANDS["package"][3])
+
+    def test_the_page_has_a_row_for_every_job(self):
+        page = CONTRIBUTING.read_text(encoding="utf-8")
+        table_of_jobs = page.split("\n## What GitHub runs\n", 1)[1].split("\n## ", 1)[0]
+        self.assertEqual(re.findall(r"^\| `([^`]+)` \| .+ \|$", table_of_jobs, re.M), [*JOBS[:-1], "All checks"])
+
+    def test_the_page_gives_the_faults_jobs_command_for_a_contributor_to_run(self):
+        """Without `--no-skips`: on a contributor's computer a test that cannot run there is passed over, and the page says so."""
+        here = COMMANDS["faults"][0].replace(" --no-skips", "")
+        self.assertEqual(here, "python3 tools/planted_faults.py")
+        page = CONTRIBUTING.read_text(encoding="utf-8")
+        self.assertIn("\n" + here + "\n", page)
+        self.assertIn("On GitHub that fails the job (`--no-skips`)", words_of(CONTRIBUTING))
 
     def test_the_page_gives_the_package_jobs_own_commands_for_a_contributor_to_run(self):
         """A contributor's own check must fail where GitHub's would.
