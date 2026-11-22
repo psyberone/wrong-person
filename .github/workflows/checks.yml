@@ -1,0 +1,174 @@
+# The checks every change must pass before it merges. CONTRIBUTING.md says what
+# each one proves and how to run it on your own machine.
+#
+# Rules this file keeps:
+#   - The token it runs with can only read the repository.
+#   - Each action is pinned to a full commit, with its version in a comment.
+#   - Nothing a person typed (a title, a body, a branch name) is ever written into
+#     a script. It reaches a step through `env:` and is read as data.
+#   - The one job that holds a secret installs nothing and runs one script.
+name: Checks
+
+on:
+  pull_request:
+    # `edited` is here because the private-words job reads the title and the body.
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer push to a pull request stops the older run. A run on main is never stopped.
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash        # with -e and pipefail, so a failing line fails the step
+
+jobs:
+  tests:
+    name: tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run the tests with nothing installed
+        run: |
+          python --version
+          PYTHONPATH=src python -m unittest discover -s tests
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Install the pinned development tools
+        run: python -m pip install --group dev
+      - name: Measure branch coverage (the floor is in pyproject.toml)
+        run: |
+          PYTHONPATH=src python -m coverage run -m unittest discover -s tests
+          python -m coverage report
+
+  package:
+    name: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Install the pinned development tools
+        run: python -m pip install --group dev
+      - name: Build the wheel
+        run: python -m build --wheel --outdir "$RUNNER_TEMP/dist"
+      - name: Install the wheel, and nothing else, into a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/clean"
+          "$RUNNER_TEMP/clean/bin/python" -m pip install --no-index --no-deps "$RUNNER_TEMP"/dist/wrong_person-*.whl
+      - name: Run the tests against the installed wheel, away from the source
+        run: |
+          mkdir "$RUNNER_TEMP/apart"
+          cp -R tests tools README.md "$RUNNER_TEMP/apart/"
+          cd "$RUNNER_TEMP/apart"
+          test ! -e src
+          "$RUNNER_TEMP/clean/bin/python" - <<'PY'
+          import pathlib, sys, wrong_person
+          home = pathlib.Path(sys.prefix).resolve()
+          found = pathlib.Path(wrong_person.__file__).resolve()
+          if home not in found.parents:
+              sys.exit(f"the package came from {found}, not from the installed wheel in {home}")
+          print(f"testing the installed package at {found}")
+          PY
+          "$RUNNER_TEMP/clean/bin/python" -m unittest discover -s tests
+
+  mutation:
+    name: mutation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Install the pinned development tools
+        run: python -m pip install --group dev
+      - name: Plant the mutants and run the tests against each
+        run: |
+          python -m mutmut run
+          python -m mutmut export-cicd-stats
+      - name: Hold the result to the floor (it is in tools/mutation_floor.py)
+        run: python tools/mutation_floor.py
+
+  private-words:
+    name: private-words
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0     # the whole history, since every commit is public
+      - name: Look for the private words in the files, the history and the pull request
+        # The runner's own Python: this job installs nothing and uses no other action.
+        # The script never prints what matched, and it fails if it has no pattern,
+        # unless the pull request comes from a fork, which is never given secrets.
+        env:
+          PRIVATE_WORDS: ${{ secrets.PRIVATE_WORDS }}
+          PRIVATE_WORDS_FROM_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          PRIVATE_WORDS_TITLE: ${{ github.event.pull_request.title }}
+          PRIVATE_WORDS_BODY: ${{ github.event.pull_request.body }}
+          PRIVATE_WORDS_BRANCH: ${{ github.head_ref }}
+        run: python3 tools/private_words.py
+
+  all-checks:
+    name: All checks
+    # The one check that the protection on main waits for. It runs even when a job
+    # above failed or was stopped, so that "did not run" can never read as "passed".
+    if: always()
+    needs: [tests, coverage, package, mutation, private-words]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every job above must have succeeded
+        env:
+          TESTS: ${{ needs.tests.result }}
+          COVERAGE: ${{ needs.coverage.result }}
+          PACKAGE: ${{ needs.package.result }}
+          MUTATION: ${{ needs.mutation.result }}
+          PRIVATE_WORDS_JOB: ${{ needs.private-words.result }}
+        run: |
+          failed=0
+          for job in "tests $TESTS" "coverage $COVERAGE" "package $PACKAGE" "mutation $MUTATION" "private-words $PRIVATE_WORDS_JOB"; do
+            echo "$job"
+            case "$job" in
+              *" success") ;;
+              *) failed=1 ;;
+            esac
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "::error title=All checks::a job did not succeed, so this change is not ready to merge"
+          fi
+          exit "$failed"
