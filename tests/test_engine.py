@@ -724,6 +724,10 @@ class Wording(unittest.TestCase):
             # three times is one report, not two
             '{"Jack": ["the lad with the beanstalk"], "Jack": ["the giant killer"], "Jack": ["the nimble one"]}':
                 "mine.json: Jack is listed twice",
+            # two names listed twice are both reported, in the order the file first gives them
+            '{"Jill": ["the girl on the hill"], "Jack": ["the lad with the beanstalk"], '
+            '"Jack": ["the giant killer"], "Jill": ["the one who came tumbling after"]}':
+                "mine.json: Jill is listed twice; Jack is listed twice",
             # and another fault in the file does not hide it
             '{"Jack": ["the lad with the beanstalk"], "Jack": ["the giant killer"], "jill": ["the girl on the hill"]}':
                 "mine.json: Jack is listed twice; 'jill' must be one capitalised word of at most 9 letters",
