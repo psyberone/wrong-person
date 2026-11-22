@@ -32,6 +32,11 @@ precision = 1
 show_missing = true
 
 # Development tools only; the package itself needs nothing but the standard library.
+# Pinned to the versions the floors were measured with. Install them with
+#     python3 -m pip install --group dev       (pip 25.1 or newer)
+[dependency-groups]
+dev = ["build==1.5.0", "coverage[toml]==7.15.2", "mutmut==3.6.0", "pytest==9.1.1"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
@@ -39,4 +44,10 @@ testpaths = ["tests"]
 [tool.mutmut]
 source_paths = ["src/"]
 pytest_add_cli_args_test_selection = ["tests/"]
-also_copy = ["README.md"]   # tests/test_readme.py runs the README's example
+also_copy = [
+    "README.md",         # tests/test_readme.py runs the README's example
+    "tools/",            # tests/test_tools.py and tests/test_private_words.py run the two scripts
+    ".github/",          # tests/test_workflow.py reads the workflow,
+    "CONTRIBUTING.md",   # this page,
+    "pyproject.toml",    # and this file
+]

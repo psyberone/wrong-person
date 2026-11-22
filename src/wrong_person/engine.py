@@ -80,8 +80,8 @@ class Board:
     """Names in reading order, plus who is in each scope of each suspect.
 
     shape is (chapters, pages in a chapter, lines on a page, names on a line).
-    Nothing a board holds can be edited in place: its names, its shape and its
-    tables are tuples all the way down.
+    Its names, its shape and each scope's table are tuples all the way down, so
+    none of them can be edited in place.
     """
 
     def __init__(self, names, shape):
