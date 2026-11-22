@@ -67,6 +67,20 @@ class Verdict(unittest.TestCase):
         self.refused(summary(79, 100, timeout=21), "79.0%")
         self.refused(summary(79, 100, no_tests=21), "79.0%")
         self.refused(summary(79, 100, suspicious=21), "79.0%")
+        self.refused(summary(79, 100, skipped=21), "79.0%")
+        self.refused(summary(79, 100, segfault=21), "79.0%")
+        self.refused(summary(79, 100, survived=21), "79.0%")
+
+    def test_the_floor_is_held_exactly_however_large_the_counts(self):
+        """No run could be this large. The arithmetic is exact all the same, so that no size of run can slip under the floor."""
+        self.refused(summary(3999999999999999999999999999999, 5 * 10 ** 30), "79.9%", "under the floor of 80%")
+        self.assertIs(self.floor.verdict(summary(4 * 10 ** 30, 5 * 10 ** 30))[0], True)
+        self.refused(summary(8 * 10 ** 399 - 1, 10 ** 400), "79.9%", "under the floor of 80%")
+        passed, message = self.floor.verdict(summary(8 * 10 ** 399, 10 ** 400))
+        self.assertIs(passed, True, message)
+        self.assertIn("(80.0%); the floor is 80%", message)
+        self.assertIs(self.floor.verdict(summary(801, 1000), floor=80.1)[0], True)
+        self.assertIs(self.floor.verdict(summary(800, 1000), floor=80.1)[0], False)
 
     def test_a_run_with_no_mutants_fails(self):
         self.refused(summary(0, 0), "no mutants were made")
@@ -130,6 +144,15 @@ class Command(unittest.TestCase):
             ran = self.run_script(cwd=folder)
         self.assertEqual(ran.returncode, 0, ran.stderr)
         self.assertIn("409 of 416", ran.stdout)
+
+    def test_the_command_reads_counts_of_any_size(self):
+        with tempfile.TemporaryDirectory() as folder:
+            ran = self.run_script(str(self.written(folder, json.dumps(summary(8 * 10 ** 399 - 1, 10 ** 400)))))
+        self.assertEqual(ran.returncode, 1)
+        self.assertNotIn("Traceback", ran.stderr)
+        self.assertTrue(ran.stderr.endswith("mutants killed (79.9%), under the floor of 80%\n"), ran.stderr[-80:])
+        self.assertEqual(ran.stderr.count("\n"), 1)
+        self.assertEqual(ran.stdout, "")
 
     def test_the_command_fails_without_a_file(self):
         with tempfile.TemporaryDirectory() as folder:

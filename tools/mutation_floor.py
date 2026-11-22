@@ -10,6 +10,7 @@ cannot be read. A development tool: the package never imports it.
 """
 import json
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 FLOOR = 80.0                                          # per cent of mutants that the tests must kill
@@ -20,8 +21,9 @@ INTERRUPTED = "check_was_interrupted_by_user"
 def verdict(stats, floor=FLOOR):
     """Whether a run's summary meets the floor -> (passed, a sentence that says why).
 
-    The rate is killed / total. A mutant that timed out, looked suspicious or had
-    no test counts against it exactly as a survivor does.
+    The rate is killed / total. Whatever else became of a mutant (it survived,
+    timed out, looked suspicious, had no test, was skipped, crashed Python), it
+    counts against the rate. The comparison is exact however large the counts.
     """
     if not isinstance(stats, dict):
         return False, f"the mutation summary must be a JSON object, got {stats!r}"
@@ -44,7 +46,7 @@ def verdict(stats, floor=FLOOR):
         return False, "no mutants were made, so the tests were not tried against anything"
     rate = (1000 * killed // total) / 10              # never rounded up: 79.99% must not read as 80.0%
     told = f"{killed} of {total} mutants killed ({rate:.1f}%)"
-    if 100 * killed < floor * total:
+    if 100 * killed < Fraction(floor) * total:        # a float here would round, and counts past its range would be an error
         return False, f"{told}, under the floor of {floor:g}%"
     return True, f"{told}; the floor is {floor:g}%"
 
