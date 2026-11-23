@@ -27,9 +27,21 @@ script that plants these faults.
 
 E114 to E135 came with the change that made `rule_space` check what it is given
 (issue #3). The AI coding assistant planted them against its own change, one
-or more for each thing the function now refuses or leaves out, and they carry
-the tag `u5` for the work unit. E017 and E021 were written again for the same
-change: the lines they edit moved.
+or more for each thing the function now refuses or leaves out and for what it
+gives back, and they carry the tag `u5` for the work unit. Three older faults
+were written again for the same change. The words E017 replaces changed. The
+words E021 replaces came to stand in two places. E020 put a bare `return`
+before the loops, which made a generator yield nothing and would make the
+function of today give back `None`; it gives back an empty space now.
+
+E136 to E152 came from the review of that change, and carry the tag `u5r`.
+Five AI reviewers planted faults of their own in the function. E136 to E147
+and E151 are the ones that no test caught, with one that was caught only on
+some runs (E144). Each names the test that was added or made stronger for it.
+E143 and E152 were caught by the tests as they stood, and stood in no list.
+E148 to E150 are for the one change the review brought to the function
+itself: it copies each of its lists once, so that what it checked is what it
+uses.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -100,9 +112,9 @@ FAULTS = [
     ("E019 [G4-R4] rule_space drops 'ends'",
      "test_engine.Semantics.test_the_rule_space_is_the_whole_vocabulary",
      [(E, 'for match in ("contains", "begins", "ends"):', 'for match in ("contains", "begins"):')]),
-    ("E020 [G4-R5] rule_space yields nothing",
+    ("E020 [G4-R5] rule_space gives back an empty space",
      "test_engine.Semantics.test_the_rule_space_is_the_whole_vocabulary",
-     [(E, "    for scope in SCOPES:\n        for match in", "    return\n    for scope in SCOPES:\n        for match in")]),
+     [(E, "    for scope in SCOPES:\n        for match in", "    return ()\n    for scope in SCOPES:\n        for match in")]),
     ("E021 [G4-R6] rule_space uses only the first letter set",
      "test_engine.Semantics.test_the_rule_space_is_the_whole_vocabulary",
      [(E, "            for value in letter_sets:", "            for value in list(letter_sets)[:1]:")]),
@@ -495,4 +507,61 @@ FAULTS = [
     ("E135 [u5] nothing given gives nothing back at all",
      RS + "test_nothing_given_is_an_empty_space",
      [(E, "    space = []\n", "    space = []\n    if not letter_sets and not named:\n        return None\n")]),
+    ("E136 [u5r] part of a name on the board passes for a name on it",
+     RS + "test_part_of_a_name_on_the_board_is_not_on_it_and_nor_is_more_than_one",
+     [(E, "        if name.upper() not in board.upper:\n",
+          "        if not any(name.upper() in known for known in board.upper):\n")]),
+    ("E137 [u5r] the beginning of a name on the board passes for a name on it",
+     RS + "test_part_of_a_name_on_the_board_is_not_on_it_and_nor_is_more_than_one",
+     [(E, "        if name.upper() not in board.upper:\n",
+          "        if not any(known.startswith(name.upper()) for known in board.upper):\n")]),
+    ("E138 [u5r] a name that holds a name on the board passes for a name on it",
+     RS + "test_part_of_a_name_on_the_board_is_not_on_it_and_nor_is_more_than_one",
+     [(E, "        if name.upper() not in board.upper:\n",
+          "        if not any(known in name.upper() for known in board.upper):\n")]),
+    ("E139 [u5r] a named person is looked for as if the board wrote every name Like This",
+     RS + "test_a_named_person_is_found_however_the_board_writes_its_names",
+     [(E, "        if name.upper() not in board.upper:\n", "        if name.title() not in board.names:\n")]),
+    ("E140 [u5r] any sequence is taken, text aside: a deque, a range",
+     RS + "test_only_a_list_or_a_tuple_is_taken",
+     [(E, "        if not isinstance(given, (list, tuple)):\n",
+          '        if isinstance(given, (str, bytes)) or not isinstance(given, __import__("collections.abc").abc.Sequence):\n')]),
+    ("E141 [u5r] the letter sets are checked last first",
+     RS + "test_the_first_thing_wrong_is_the_one_named",
+     [(E, "    for value in letter_sets:\n        Rule(", "    for value in reversed(letter_sets):\n        Rule(")]),
+    ("E142 [u5r] the letter sets are checked as a set, in no order",
+     RS + "test_the_first_thing_wrong_is_the_one_named",
+     [(E, "    for value in letter_sets:\n        Rule(", "    for value in set(letter_sets):\n        Rule(")]),
+    ("E143 [u5r] the named people are checked last first",
+     RS + "test_the_first_thing_wrong_is_the_one_named",
+     [(E, "    for name in named:\n        Rule(", "    for name in reversed(named):\n        Rule(")]),
+    ("E144 [u5r] the named people are checked as a set, in no order",
+     RS + "test_the_first_thing_wrong_is_the_one_named",
+     [(E, "    for name in named:\n        Rule(", "    for name in set(named):\n        Rule(")]),
+    ("E145 [u5r] a kind of list or of tuple is refused: a named tuple",
+     RS + "test_a_kind_of_list_or_of_tuple_is_taken_too",
+     [(E, "        if not isinstance(given, (list, tuple)):\n", "        if type(given) not in (list, tuple):\n")]),
+    ("E146 [u5r] the letter sets come out in the order of the alphabet, not the order given",
+     RS + "test_the_rules_come_in_one_order",
+     [(E, "            for value in letter_sets:\n", "            for value in sorted(letter_sets):\n")]),
+    ("E147 [u5r] the caller's own list of letter sets is put in the order of the alphabet",
+     RS + "test_the_rules_come_in_one_order",
+     [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)",
+          "    if isinstance(letter_sets, list):\n        letter_sets.sort()\n    letter_sets, named = tuple(letter_sets), tuple(named)")]),
+    ("E148 [u5r] the lists are read again when the rules are made",
+     RS + "test_each_list_is_copied_once_so_what_was_checked_is_what_is_used",
+     [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)      # read once: what is checked is what is used\n", "")]),
+    ("E149 [u5r] the letter sets are read again when the rules are made",
+     RS + "test_each_list_is_copied_once_so_what_was_checked_is_what_is_used",
+     [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)", "    letter_sets, named = letter_sets, tuple(named)")]),
+    ("E150 [u5r] the named people are read again when the rules are made",
+     RS + "test_each_list_is_copied_once_so_what_was_checked_is_what_is_used",
+     [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)", "    letter_sets, named = tuple(letter_sets), named")]),
+    ("E151 [u5r] a letter set comes out in capitals, not written as given",
+     RS + "test_a_letter_set_is_kept_as_given",
+     [(E, "                    space.append(Rule(scope, match, value, positive))",
+          "                    space.append(Rule(scope, match, value.upper(), positive))")]),
+    ("E152 [u5r] nothing is checked until the space is walked: a generator again",
+     RS + "test_what_is_wrong_is_refused_at_the_call",
+     [(E, "    return tuple(space)\n", "    yield from space\n")]),
 ]

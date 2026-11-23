@@ -212,11 +212,18 @@ def rule_space(board, letter_sets, named=()):
     people, that are not a list or a tuple (one piece of text is neither); each
     letter set in turn, if Rule refuses it; each name in turn, if Rule refuses
     it or it is not on the board. What is given twice is not noticed: its rules
-    come out twice.
+    come out twice. A kind of list or of tuple (a named tuple, say) is taken as
+    one. Each letter set and each name is put in its rules written as given.
+
+    The caller's lists are never changed. Each is copied once, when it has been
+    seen to be a list or a tuple (a plain tuple needs no copy), and everything
+    after that works from the copy. So the rules are made from what was checked,
+    whatever becomes of the caller's list meanwhile.
     """
     for what, given in (("letter sets", letter_sets), ("named people", named)):
         if not isinstance(given, (list, tuple)):
             raise ValueError(f"{what} must be a list or a tuple, got {given!r}")
+    letter_sets, named = tuple(letter_sets), tuple(named)      # read once: what is checked is what is used
     for value in letter_sets:
         Rule("name", "contains", value)         # made only to be checked: Rule refuses what is no letter set
     for name in named:
