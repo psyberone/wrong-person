@@ -8,12 +8,13 @@ and sees that its test fails. CONTRIBUTING.md says how to add one.
 These were planted by hand during the reviews of the first work units, by the
 AI reviewers and by the AI coding assistant that wrote the fixes. The tag in
 square brackets is the name a fault had in the review it came from: G1 to G5
-are the reviewers of the five gates, S with a number is the review finding
-whose fix the fault was planted against, `own` marks a fault the coding
-assistant planted against its own fix, and `mutmut` marks one that `mutmut`
-made first. Where several tests fail for a fault, the test named is the one
-that fails for the fewest faults. Where the name of another failing test says
-what the fault breaks, that test was chosen by hand instead.
+are the reviewers of the five gates (a `w` after the number marks the second
+review, of the changes that fixed what the first had found), S with a number
+is the review finding whose fix the fault was planted against, `own` marks a
+fault the coding assistant planted against its own fix, and `mutmut` marks one
+that `mutmut` made first. Where several tests fail for a fault, the test named
+is the one that fails for the fewest faults. Where the name of another failing
+test says what the fault breaks, that test was chosen by hand instead.
 
 Three faults name their test for another reason (E035, E099, E100). What they
 break depends on chance: the order Python walks a set in, or a hash, both of

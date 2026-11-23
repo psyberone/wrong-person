@@ -10,7 +10,14 @@ each thing the script promises. N42 and later were added after the AI reviewers
 of the five gates read the script: each is planted against a fix made for one
 of their findings. None of them makes a test wait for more than about ten
 seconds: the faults that take a time limit away are tried on tests that end by
-themselves after ten.
+themselves after ten. N139 and N141 to N147 were added when the reviewers read
+those fixes: N139 holds a fix for something the fixes themselves brought in,
+and N141 to N147 are faults of the reviewers' own, on lines of the fixes, that
+no test caught until then.
+
+One of these is planted elsewhere: N118 takes a fault out of another list, to
+show that a fault cannot be deleted quietly. N136 and N140 are planted in the
+script like the others, and the test each names is among the workflow's.
 """
 PF = "tools/planted_faults.py"
 TESTS = "test_planted_faults."
@@ -123,6 +130,9 @@ FAULTS = [
     ("N63 the tests that did not pass alone are counted as every test named",
      TESTS + "Refusals.test_a_test_that_fails_alone_with_no_fault_planted_proves_nothing",
      [(PF, '[f"{len(weak)} of the tests named did not pass', '[f"{len(tests)} of the tests named did not pass')]),
+    ("N145 of the tests run alone, only one that fails is refused, and not one that gives no verdict",
+     TESTS + "Refusals.test_a_test_that_gives_no_verdict_alone_with_no_fault_planted_proves_nothing_either",
+     [(PF, "judged(lab, test)[0] not in (PASSED, SKIPPED)]", "judged(lab, test)[0] == FAILED]")]),
     # ---- planting
     ("N13 text that is there twice is planted in every place",
      TESTS + "Refusals.test_text_that_is_there_twice_is_not_planted_in_the_first_place_it_is_found",
@@ -290,6 +300,12 @@ FAULTS = [
     ("N99 when a run ends, the depth is left as the run set it",
      TESTS + "Children.test_each_run_tells_what_it_starts_and_what_it_reads_how_deep_it_is",
      [(PF, '        os.environ[DEPTH] = before or "0"\n', "        pass\n")]),
+    ("N146 a run started one deep tells what it starts that it is one deep as well",
+     TESTS + "Children.test_each_run_tells_what_it_starts_and_what_it_reads_how_deep_it_is",
+     [(PF, 'os.environ[DEPTH] = "2" if before == "1" else "1"', 'os.environ[DEPTH] = "1"')]),
+    ("N147 when a run ends the depth is left at none, however deep the run was started",
+     TESTS + "Children.test_each_run_tells_what_it_starts_and_what_it_reads_how_deep_it_is",
+     [(PF, 'os.environ[DEPTH] = before or "0"', 'os.environ[DEPTH] = "0"')]),
     # ---- the lists
     ("N30 two faults may share a label",
      TESTS + "Refusals.test_two_faults_may_not_share_a_label",
@@ -385,6 +401,15 @@ FAULTS = [
     ("N122 every name is printed in quotes, the plain ones too",
      TESTS + "Refusals.test_a_copy_that_a_test_wrote_to_is_not_trusted",
      [(PF, "    return name if PLAIN.fullmatch(name) else ", "    return name if False else ")]),
+    ("N141 a name that holds the mark that opens a command is printed as it stands",
+     TESTS + "Refusals.test_a_name_is_printed_as_it_stands_only_when_nothing_in_it_is_odd",
+     [(PF, 'r"[' + BS + 'w./-]+"', 'r"[' + BS + "w./#" + BS + "[" + BS + ']-]+"')]),
+    ("N142 a name of two lines is printed as it stands, on two lines",
+     TESTS + "Refusals.test_a_name_is_printed_as_it_stands_only_when_nothing_in_it_is_odd",
+     [(PF, 'r"[' + BS + 'w./-]+"', 'r"[' + BS + "w./" + BS + 'n-]+"')]),
+    ("N143 a name with a colon in it is printed as it stands",
+     TESTS + "Refusals.test_a_name_is_printed_as_it_stands_only_when_nothing_in_it_is_odd",
+     [(PF, 'r"[' + BS + 'w./-]+"', 'r"[' + BS + 'w./:-]+"')]),
     ("N123 the name of a list is printed as it stands",
      TESTS + "Refusals.test_a_name_from_the_disk_is_printed_so_that_it_is_no_command",
      [(PF, '        where = shown(f"{LISTS}/{path.name}")', '        where = f"{LISTS}/{path.name}"')]),
@@ -422,6 +447,10 @@ FAULTS = [
     ("N130 where no test may skip, two skipped tests are said to be one",
      TESTS + "Skips.test_where_no_test_may_skip_every_skipped_test_is_counted",
      [(PF, '("1 fault\'s test was skipped" if skipped == 1 else', '("1 fault\'s test was skipped" if skipped else')]),
+    ("N144 a test that fails in one case and is skipped in another is read as skipped",
+     TESTS + "Skips.test_a_test_that_fails_in_one_case_is_a_kill_though_another_case_of_it_is_skipped",
+     [(PF, '        if result.in_its_body:\n            answer = "failed"\n        elif result.skipped:\n            answer = "skipped"\n',
+       '        if result.skipped:\n            answer = "skipped"\n        elif result.in_its_body:\n            answer = "failed"\n')]),
     # ---- how long it waits
     ("N135 a test may take twenty minutes and not two",
      TESTS + "Refusals.test_a_test_may_take_two_minutes_and_the_suite_five",
@@ -435,7 +464,14 @@ FAULTS = [
     # ---- run as a program
     ("N131 a label that the terminal cannot show stops the run",
      TESTS + "RunAsAProgram.test_a_label_that_the_terminal_cannot_show_is_printed_in_escapes_and_the_run_goes_on",
-     [(PF, '        stream.reconfigure(errors="backslashreplace")\n', "        pass\n")]),
+     [(PF, '        sys.stdout.reconfigure(errors="backslashreplace")', "        pass")]),
+    ("N140 the script's flag is given another name and the contributing page is not",
+     "test_workflow.Floors.test_every_command_the_page_gives_for_the_planted_faults_is_one_the_script_takes",
+     [(PF, '[--no-skips] [--check]"', '[--no-skips] [--fits]"'),
+      (PF, '        elif arg == "--check":', '        elif arg == "--fits":')]),
+    ("N139 started with its output closed, the script fails before it begins and ends with 1",
+     TESTS + "RunAsAProgram.test_with_an_output_closed_it_still_ends_as_it_should",
+     [(PF, '    if hasattr(sys.stdout, "reconfigure"):', "    if True:")]),
     ("N132 a signal to stop is not heard, and the copy and the test are left behind",
      TESTS + "RunAsAProgram.test_stopped_from_outside_it_leaves_no_copy_and_no_test_running",
      [(PF, "        signal.signal(number, stop)\n", "        pass\n")]),

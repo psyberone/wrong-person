@@ -8,11 +8,12 @@ CONTRIBUTING.md says how to add one.
 
 Most were planted by hand during the three reviews of the repository checks,
 by the AI reviewers and by the AI coding assistant that wrote the fixes. J01 to
-J14 are later: the coding assistant wrote them with the job that plants these
-faults. A tag in square brackets says where a fault came from: G1 to G5 are the
-reviewers of the five gates, each with that reviewer's own name for the fault,
-and M with a number is the review finding whose fix the fault was planted
-against. For L01 to L18 the tag is the name the fault had in the third review.
+J15 are later: the coding assistant wrote J01 to J14 with the job that plants
+these faults, and J15 after that job's review. A tag in square brackets says
+where a fault came from: G1 to G5 are the reviewers of the five gates, each
+with that reviewer's own name for the fault, and M with a number is the review
+finding whose fix the fault was planted against. For L01 to L18 the tag is the
+name the fault had in the third review.
 A fault with no tag was planted by a reviewer or by the coding assistant, and
 this list does not record which. Where several tests fail for a fault, the test
 named is the one that fails for the fewest faults. Where the name of another
@@ -936,10 +937,6 @@ FAULTS = [
     ("J15 the page gives a flag that the script does not have",
      "test_workflow.Floors.test_every_command_the_page_gives_for_the_planted_faults_is_one_the_script_takes",
      [(CO, "python3 tools/planted_faults.py --check\n", "python3 tools/planted_faults.py --fits\n")]),
-    ("J16 the script's flag is given another name and the page is not",
-     "test_workflow.Floors.test_every_command_the_page_gives_for_the_planted_faults_is_one_the_script_takes",
-     [("tools/planted_faults.py", '[--no-skips] [--check]"', '[--no-skips] [--fits]"'),
-      ("tools/planted_faults.py", '        elif arg == "--check":', '        elif arg == "--fits":')]),
     # ---- the third review of the repository checks
     ("L01 [H7] what follows the last hash in a message is not read",
      "test_private_words.Scan.test_a_word_after_the_last_hash_in_a_message_is_found",

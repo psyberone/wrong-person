@@ -272,6 +272,17 @@ class AddingAFile(SmallRepository):
 
 
 class Skips(SmallRepository):
+    def test_a_test_that_fails_in_one_case_is_a_kill_though_another_case_of_it_is_skipped(self):
+        self.write("tests/test_cases.py", "import unittest\n\nimport shapes\n\n\nclass Cases(unittest.TestCase):\n"
+                   "    def test_the_sides_of_each_shape(self):\n        for shape, sides in (('circle', None), ('triangle', 3)):\n"
+                   "            with self.subTest(shape=shape):\n                if sides is None:\n"
+                   "                    self.skipTest('no circles on this computer')\n"
+                   "                self.assertEqual(shapes.sides(shape), sides)\n")
+        status, out, err = self.planted(("T68 a fourth side, and a test of two cases, one of them skipped", "test_cases.Cases.test_the_sides_of_each_shape", [A_FOURTH_SIDE]))
+        self.assertEqual(status, 0, out + err)
+        self.assertIn("killed        T68", out)
+        self.assertIn("1 fault: 1 killed, 0 survived, 0 skipped here, 0 that cannot be judged", out)
+
     def test_a_fault_whose_test_is_skipped_is_neither_killed_nor_a_survivor(self):
         status, out, err = self.planted(SKIPPED, KILLED)
         self.assertEqual(status, 0, out + err)
@@ -508,6 +519,17 @@ class Refusals(SmallRepository):
         self.cannot_vouch(unread, KILLED, said=["1 of the tests named did not pass when run alone with no fault planted",
                                                 "\n  test_shapes.Sides.test_b_leans_on_the_triangle_test\n"])
 
+    def test_a_test_that_gives_no_verdict_alone_with_no_fault_planted_proves_nothing_either(self):
+        """What it sets up first passes only after another test has run. Alone it neither passes nor fails in its own body."""
+        leaning = TESTS.replace('        self.assertEqual(shapes.sides("triangle"), 3)\n',
+                                '        self.assertEqual(shapes.sides("triangle"), 3)\n        SEEN.append("triangle")\n')
+        self.write("tests/test_shapes.py", "SEEN = []\n" + leaning + "\n\nclass Tilts(unittest.TestCase):\n    def setUp(self):\n        self.assertTrue(SEEN)\n\n"
+                   "    def test_a_square_has_four_sides(self):\n        self.assertEqual(shapes.sides('square'), 4)\n")
+        unread = ("T67 the page loses two words, which no test reads", "test_shapes.Tilts.test_a_square_has_four_sides",
+                  [("README.md", "Shapes and their sides.", "Shapes.")])
+        self.cannot_vouch(unread, KILLED, said=["1 of the tests named did not pass when run alone with no fault planted",
+                                                "\n  test_shapes.Tilts.test_a_square_has_four_sides\n"])
+
     def test_a_failing_test_that_the_suite_never_runs_proves_nothing_either(self):
         self.write("tests/checks_of_shapes.py", "import unittest\n\n\nclass Checks(unittest.TestCase):\n    def test_that_fails(self):\n        self.fail()\n")
         unread = ("T64 the page loses two words", "checks_of_shapes.Checks.test_that_fails", [("README.md", "Shapes and their sides.", "Shapes.")])
@@ -652,6 +674,14 @@ class Refusals(SmallRepository):
             status, out, err = self.planted(KILLED)
             self.assertIn("in the copy no longer matches the repository", err)
             self.assert_no_command_in(out + err)
+
+    def test_a_name_is_printed_as_it_stands_only_when_nothing_in_it_is_odd(self):
+        """The mark that opens a command, a line break, a colon: each of them alone puts a name in quotes, on one line."""
+        for name, printed in (("src/shapes-2.py", "src/shapes-2.py"), ("##[error]name", '"#\\u0023[error]name"'),
+                              ("two\nlines", '"two\\nlines"'), ("::error::name", '"::error::name"')):
+            with self.subTest(name=name):
+                out, err = self.cannot_vouch(KILLED, args=["--only", name], said=[f"no fault's label begins with {printed}\n"])
+                self.assert_no_command_in(out + err)
 
     def test_a_test_may_take_two_minutes_and_the_suite_five(self):
         """The contributing page says two minutes, and the job on GitHub has ten for everything."""
@@ -825,12 +855,17 @@ class Children(SmallRepository):
                 self.cannot_vouch(KILLED, said=["more than two deep"])
 
     def test_each_run_tells_what_it_starts_and_what_it_reads_how_deep_it_is(self):
-        here = int(os.environ.get(self.script.DEPTH, "0"))
-        self.seen_from_the_copy(f"self.assertEqual(os.environ.get({self.script.DEPTH!r}), {str(here + 1)!r})")
-        lists = {"shapes.py": f"import os\nassert os.environ.get({self.script.DEPTH!r}) == {str(here + 1)!r}\n" + a_list(KILLED)}
-        status, out, err = self.planted(lists=lists)
-        self.assertEqual(status, 0, out + err)
-        self.assertEqual(int(os.environ.get(self.script.DEPTH, "0")), here)
+        """Tried from every depth a run may start at, whatever depth these tests are run at themselves: no mark, "0", and "1"."""
+        for found, told, left in ((None, "1", "0"), ("0", "1", "0"), ("1", "2", "1")):
+            with self.subTest(found=found), mock.patch.dict(os.environ):
+                os.environ.pop(self.script.DEPTH, None)
+                if found is not None:
+                    os.environ[self.script.DEPTH] = found
+                self.seen_from_the_copy(f"self.assertEqual(os.environ.get({self.script.DEPTH!r}), {told!r})")
+                lists = {"shapes.py": f"import os\nassert os.environ.get({self.script.DEPTH!r}) == {told!r}\n" + a_list(KILLED)}
+                status, out, err = self.planted(lists=lists)
+                self.assertEqual(status, 0, out + err)
+                self.assertEqual(os.environ.get(self.script.DEPTH), left)
 
     def test_what_a_test_prints_goes_nowhere(self):
         """Held in memory, what a test printed without end would take all the memory there is long before its time was up."""
@@ -921,7 +956,7 @@ class TheLists(unittest.TestCase):
     def test_each_list_holds_as_many_faults_as_it_did(self):
         """To add a fault, or to retire one, change its list's number here in the same pull request."""
         held = {path.name: len(runpy.run_path(str(path))["FAULTS"]) for path in sorted((ROOT / "tools" / "faults").glob("*.py"))}
-        self.assertEqual(held, {"checks.py": 298, "package.py": 113, "runner.py": 138})
+        self.assertEqual(held, {"checks.py": 297, "package.py": 113, "runner.py": 147})
 
 
 class RunAsAProgram(SmallRepository):
@@ -960,6 +995,22 @@ class RunAsAProgram(SmallRepository):
         done = self.run_it(KILLED, SURVIVOR, args=["--only", "T1"])
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertIn("1 fault: 1 killed", done.stdout)
+
+    @unittest.skipUnless(os.name == "posix", "a stream is closed here as a Unix shell closes it")
+    def test_with_an_output_closed_it_still_ends_as_it_should(self):
+        """Started with `>&-` or `2>&-`, Python has no such stream at all. A crash over that would end with 1, which means that a fault survived."""
+        command = [sys.executable, "-B", str(self.repo / "tools" / "planted_faults.py")]
+        not_there = ("T28 not there", TRIANGLE, [(SHAPES, "nowhere", "x")])
+        for closed, fault, status, said in ((">&-", KILLED, 0, ""), ("2>&-", KILLED, 0, "1 fault: 1 killed"),
+                                            (">&-", not_there, 2, "planted faults: cannot vouch"), ("2>&-", not_there, 2, "planted faults: cannot vouch")):
+            with self.subTest(closed=closed, status=status):
+                self.write("tools/faults/shapes.py", a_list(fault))
+                shutil.copy(SCRIPT, self.repo / "tools" / "planted_faults.py")
+                done = subprocess.run(["/bin/sh", "-c", f'exec "$@" {closed}', "sh", *command], capture_output=True, text=True,
+                                      cwd=self.made.name, env={**os.environ, **QUIET_GIT})
+                self.assertEqual(done.returncode, status, done.stdout + done.stderr)
+                self.assertIn(said, done.stdout + done.stderr)
+                self.assertNotIn("Traceback", done.stdout + done.stderr)
 
     @unittest.skipUnless(hasattr(os, "killpg") and hasattr(signal, "SIGHUP"), "signals and groups of processes as Unix has them")
     def test_stopped_from_outside_it_leaves_no_copy_and_no_test_running(self):

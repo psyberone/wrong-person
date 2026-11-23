@@ -38,7 +38,7 @@ The README states these in full. Every change is judged against them.
    newer. The tools below are for development and are never imported by it.
 
 Both floors are measured on the package, `src/wrong_person`. The scripts in
-`tools/` have tests of their own, written first, and so do the rules that the
+`tools/` have tests of their own, and so do the rules that the
 workflow file keeps (`tests/test_workflow.py`). `mutmut` does not reach those,
 so each was tried against faults planted by hand. The faults are kept in
 `tools/faults/` and planted again on every pull request
@@ -122,7 +122,7 @@ the package and for everything `mutmut` does not reach.
 | --- | --- |
 | `package.py` | The package, its riddle table and the README's example |
 | `checks.py` | The scan, the mutation floor, the workflow, `pyproject.toml` and this page |
-| `runner.py` | The script that plants the faults |
+| `runner.py` | The script that plants the faults, and for one fault a list itself |
 
 Where they came from: every one was planted by an AI. AI reviewers planted
 some while reviewing the pull requests, to see whether the tests would notice,
@@ -148,8 +148,9 @@ takes a few minutes. Each fault ends as one of four things:
   computer it is passed over. On a Mac one fault is skipped: its test needs a
   file name that is not UTF-8, and a Mac's disk refuses to hold one.
 - **CANNOT SAY.** The test did not finish within two minutes, could not be
-  loaded, or failed somewhere other than its own body: in what it or its class
-  sets up first, or in what they clear up afterwards. The run fails.
+  loaded, ended its process without an answer, or failed somewhere other than
+  its own body: in what it or its class sets up first, or in what they clear
+  up afterwards. The run fails.
 
 ```console
 # only see that every fault still fits; runs no test and takes a second
@@ -180,12 +181,12 @@ the list that fits:
 The first word of the label must be unlike every other fault's. Take enough of
 the line that the text is found only once. `None` in place of the text to
 replace adds a file that is not there. A list is a `.py` file in
-`tools/faults/` itself; any other file under that folder stops the run. Then
-run the fault alone with `--only` and see it killed, and add one to its list's
-number in `TheLists` in `tests/test_planted_faults.py`. A fault must leave its
-test able to run and to finish: one that makes the test wait for more than two
-minutes, or breaks what the test sets up before its own body runs, cannot be
-judged.
+`tools/faults/` itself; any other file there that git knows of or does not
+ignore stops the run. Then run the fault alone with `--only` and see it
+killed, and add one to its list's number in `TheLists` in
+`tests/test_planted_faults.py`. A fault must leave its test able to run and to
+finish: one that makes the test wait for more than two minutes, or breaks what
+the test sets up before its own body runs, cannot be judged.
 
 A fault must be killed on every run, not on most. If what it breaks depends on
 chance, such as the order Python walks a set in, which changes from one run to

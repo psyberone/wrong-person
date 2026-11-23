@@ -19,9 +19,10 @@ again. The repository itself is never written to.
 
 It ends with 0 when every fault was killed (its test ran and failed in its own
 body) or, without --no-skips, was skipped here; with 1 when a fault survived
-(its test passed); and with 2 when it cannot vouch for the result. It prints
-labels and the names of tests and files, never the text of an edit. A
-development tool: the package never imports it.
+(its test passed); and with 2 when it cannot vouch for the result, whether or
+not a fault survived as well. It prints labels and the names of tests and
+files, never the text of an edit. A development tool: the package never
+imports it.
 """
 import contextlib
 import json
@@ -489,8 +490,8 @@ def main(argv=None, root=None):
 
 
 if __name__ == "__main__":
-    for stream in (sys.stdout, sys.stderr):           # a label that the terminal cannot show is printed in escapes, and the run goes on
-        stream.reconfigure(errors="backslashreplace")
+    if hasattr(sys.stdout, "reconfigure"):            # started with `>&-` there is no output at all, and nothing to set
+        sys.stdout.reconfigure(errors="backslashreplace")  # a label the terminal cannot show is printed in escapes, and the run goes on
     for number in STOPS:
         signal.signal(number, stop)
     try:
