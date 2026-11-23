@@ -46,7 +46,7 @@ source_paths = ["src/"]
 pytest_add_cli_args_test_selection = ["tests/"]
 also_copy = [
     "README.md",         # tests/test_readme.py runs the README's example
-    "tools/",            # tests/test_tools.py and tests/test_private_words.py run the two scripts
+    "tools/",            # tests/test_tools.py, test_private_words.py and test_planted_faults.py run the scripts
     ".github/",          # tests/test_workflow.py reads the workflow,
     "CONTRIBUTING.md",   # this page,
     "pyproject.toml",    # and this file

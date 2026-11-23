@@ -37,13 +37,12 @@ The README states these in full. Every change is judged against them.
 7. **Standard library only.** The package needs nothing but Python 3.10 or
    newer. The tools below are for development and are never imported by it.
 
-Both floors are measured on the package, `src/wrong_person`. The two scripts in
-`tools/` have tests of their own, written first, and so do the rules that the
-workflow file keeps (`tests/test_workflow.py`). Each was tried against faults
-planted by hand; the pull request that added them says how many and what became
-of each. Those lists are not in the repository yet;
-[#6](https://github.com/psyberone/wrong-person/issues/6) is about moving lists
-like them in.
+Both floors are measured on the package, `src/wrong_person`. The scripts in
+`tools/` have tests of their own, and so do the rules that the
+workflow file keeps (`tests/test_workflow.py`). `mutmut` does not reach those,
+so each was tried against faults planted by hand. The faults are kept in
+`tools/faults/` and planted again on every pull request
+([below](#the-planted-faults)).
 
 ## Running the checks
 
@@ -67,6 +66,10 @@ python3 -m coverage report
 python3 -m mutmut run
 python3 -m mutmut export-cicd-stats
 python3 tools/mutation_floor.py
+
+# the planted faults: each goes into a copy of the repository, and the test it
+# names must fail (needs nothing installed; more about it below)
+python3 tools/planted_faults.py
 
 # the package as it would be installed: the wheel is built, installed alone into
 # a clean environment, and tested away from the source
@@ -106,6 +109,108 @@ If you change `.github/workflows/checks.yml`, run
 [`actionlint`](https://github.com/rhysd/actionlint) on it by hand as well. It is
 not one of the checks.
 
+## The planted faults
+
+A planted fault is one small, wrong change made on purpose (a hand-written
+mutant): a comparison turned round, a check left out, a line taken out of the
+workflow. If no test fails with the fault in place, the tests are not holding
+that behaviour. `mutmut` plants faults of its own, but only in the package. The
+lists under `tools/faults/` hold more than four hundred written by hand, for
+the package and for everything `mutmut` does not reach.
+
+| List | Where its faults are planted |
+| --- | --- |
+| `package.py` | The package, its riddle table and the README's example |
+| `checks.py` | The scan, the mutation floor, the workflow, `pyproject.toml` and this page |
+| `runner.py` | The script that plants the faults; for one fault a list itself, and for two the script's own tests |
+
+Where they came from: every one was planted by an AI. AI reviewers planted
+some while reviewing the pull requests, to see whether the tests would notice,
+and the AI coding assistant planted the others while writing the code and the
+fixes. Each list says at its top what its labels show of that. The faults of
+the first reviews were kept outside the repository until
+[#6](https://github.com/psyberone/wrong-person/issues/6).
+
+Each fault is a label, the full name of the one test meant to catch it, and one
+or more edits. `python3 tools/planted_faults.py` copies the repository to a
+scratch folder. There, with no fault planted, it sees that the whole suite
+passes, and that each test a fault names does not fail when it is run alone,
+which is how it is run under its fault. Then, for each fault, it makes the
+edits in the copy, runs the test the fault names, and takes the edits out
+again. Your own files are never changed. It needs only Python and git, and
+takes a few minutes. Each fault ends as one of four things:
+
+- **killed.** The test it names ran and failed in its own body. This is what
+  should happen.
+- **SURVIVED.** The test passed with the fault in place. The run fails.
+- **skipped here.** The test, or one case of it, was skipped on this computer,
+  so nothing was learned. On GitHub that fails the job (`--no-skips`); on your
+  computer it is passed over. On a Mac one fault is skipped: its test needs a
+  file name that is not UTF-8, and a Mac's disk refuses to hold one.
+- **CANNOT SAY.** The test did not finish within two minutes, could not be
+  loaded, ended its process without an answer, or failed somewhere other than
+  its own body: in what it or its class sets up first, or in what they clear
+  up afterwards. The run fails.
+
+```console
+# only see that every fault still fits; runs no test and takes a second
+python3 tools/planted_faults.py --check
+
+# only the faults whose label begins with MF
+python3 tools/planted_faults.py --only MF
+```
+
+**A fault that no longer fits.** Before any test runs, the script sees that
+every fault still fits: the text each edit replaces must be found at exactly
+one place in its file, and the test it names must be there. If your change
+touches a line that a fault points at, or renames a test that a fault names,
+the run stops with "cannot vouch" and lists every fault that "cannot be tried"
+as it stands. Aim each one at the new line, in the same pull request. Never
+delete a fault to get a green run: a test holds the number of faults in each
+list, and fails when one is gone.
+
+**Adding one.** New behaviour wants a fault as well as a test. Add an entry to
+the list that fits:
+
+```python
+("MF30 the floor is not checked at all",
+ "test_tools.Verdict.test_a_run_just_under_the_floor_fails",
+ [("tools/mutation_floor.py", "the text to replace", "what replaces it")]),
+```
+
+The first word of the label must be unlike every other fault's. Take enough of
+the line that the text is found only once. `None` in place of the text to
+replace adds a file that is not there. A list is a `.py` file in
+`tools/faults/` itself; any other file there that git knows of or does not
+ignore stops the run. Then run the fault alone with `--only` and see it
+killed, and add one to its list's number in `TheLists` in
+`tests/test_planted_faults.py`. A fault must leave its test able to run and to
+finish: one that makes the test wait for more than two minutes, or breaks what
+the test sets up before its own body runs, cannot be judged.
+
+A fault must be killed on every run, not on most. If what it breaks depends on
+chance, such as the order Python walks a set in, which changes from one run to
+the next, a test that compares one order with another will pass now and then.
+Name a test that takes the chance away. For the package that is
+`test_same_inputs_same_answer_in_every_run`, which runs the code under three
+fixed hash seeds.
+
+A Mac's disk does not tell capital letters from small ones in a file name. A
+fault that only changes the case of a file name can survive there and be killed
+on GitHub.
+
+**Three faults from the reviews are not in the lists,** because no one test can
+be named for them:
+
+- One, in the scan, changes nothing that can be seen: the same input is refused
+  in the same words, by another route.
+- One writes the workflow in a form its own tests cannot read, so all of them
+  stop before they start and none of them can be named. The same fault in a form
+  they can read is in the list (X19).
+- One leaves the riddle table out of the built package. No test can see that,
+  because the tests read the table from the source. The `package` job is there
+  for exactly this, and it was run against the fault.
+
 ## What GitHub runs
 
 On every pull request, again whenever its title or description is edited, and
@@ -118,6 +223,7 @@ on every push to `main` (`.github/workflows/checks.yml`):
 | `package` | The built wheel, installed alone into a clean environment and tested away from the source, passes the tests, so it carries its data file |
 | `mutation` | The share of mutants killed is at or above the floor |
 | `private-words` | The scan finds none of the private words in the files, in the history behind the change, or in the pull request's own words (below: what it reads and what it does not) |
+| `faults` | Every planted fault makes the test it names fail, and none of those tests was skipped |
 | `All checks` | Every job above succeeded; this is the one a merge waits for |
 
 `tests/test_workflow.py` holds what each job runs and the rules the workflow
@@ -145,6 +251,22 @@ as well.
   old one. Ask the maintainer first.
 - **`private-words` says it cannot vouch.** Nothing was found: the scan could
   not be made, and the one sentence it prints says why.
+- **`faults` says a fault SURVIVED.** The test it names passed with the fault
+  in place, so something that test was holding is no longer held. Plant that one
+  fault here (`python3 tools/planted_faults.py --only` and its label) and make
+  the test hold it again. If the fault is killed when you run it again, and no
+  line it touches was changed, what it breaks depends on chance, and it names
+  the wrong test ([above](#the-planted-faults)).
+- **`faults` says it cannot vouch.** The one sentence it prints says why. Most
+  often a fault no longer fits: the change touched the line it points at, or
+  renamed its test. The run names each one; aim it at the new line
+  ([above](#the-planted-faults)). It also says so when a test that a fault
+  names was skipped on GitHub, or could not be judged. And it says so when a
+  test fails with no fault planted. Then `tests` is red too, and that is the
+  job to look at first. If only `faults` is red, the test fails in the copy
+  alone, or when it is run alone: the run names it. The copy holds the files
+  that git knows of or does not ignore, and neither the `.git` folder nor a
+  link.
 - **`All checks` is red.** It is red whenever another job failed, was stopped,
   was skipped or ran out of time. It prints each job's result; look at the job
   that did not succeed.

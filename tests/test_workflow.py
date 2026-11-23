@@ -16,6 +16,7 @@ can hide in a piece of syntax that it skips.
 import importlib.util
 import os
 import re
+import runpy
 import shutil
 import subprocess
 import unittest
@@ -35,7 +36,7 @@ ACTIONS = {"actions/checkout": ("3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.
 CHECKOUT = "actions/checkout@" + ACTIONS["actions/checkout"][0]
 SETUP_PYTHON = "actions/setup-python@" + ACTIONS["actions/setup-python"][0]
 FROM_A_FORK = "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository"
-JOBS = ["tests", "coverage", "package", "mutation", "private-words", "all-checks"]
+JOBS = ["tests", "coverage", "package", "mutation", "private-words", "faults", "all-checks"]
 INSTALL = "python -m pip install --group dev"
 
 # Every `${{ }}` in the file, by where it is. None is in a script, and the only ones in a step's `env` are the secret,
@@ -52,6 +53,7 @@ EXPRESSIONS = {
     "jobs.all-checks.steps.0.env.PACKAGE": ["needs.package.result"],
     "jobs.all-checks.steps.0.env.MUTATION": ["needs.mutation.result"],
     "jobs.all-checks.steps.0.env.PRIVATE_WORDS_JOB": ["needs.private-words.result"],
+    "jobs.all-checks.steps.0.env.FAULTS": ["needs.faults.result"],
 }
 
 # What each job runs, step by step, to the letter.
@@ -84,8 +86,10 @@ COMMANDS = {
                  "python tools/mutation_floor.py"],
     "private-words": ['git fetch --quiet --no-tags --depth=2147483647 origin "$(git rev-parse HEAD)"',
                       "python3 -I tools/private_words.py"],
+    "faults": ["python3 tools/planted_faults.py --no-skips"],
     "all-checks": ["failed=0\n"
-                   'for job in "tests $TESTS" "coverage $COVERAGE" "package $PACKAGE" "mutation $MUTATION" "private-words $PRIVATE_WORDS_JOB"; do\n'
+                   'for job in "tests $TESTS" "coverage $COVERAGE" "package $PACKAGE" "mutation $MUTATION" "private-words $PRIVATE_WORDS_JOB" '
+                   '"faults $FAULTS"; do\n'
                    '  echo "$job"\n'
                    '  case "$job" in\n'
                    '    *" success") ;;\n'
@@ -242,7 +246,7 @@ def words_of(page):
 
 
 def load(script):
-    """One of the two scripts in tools/ as a module; they live outside the package, so they are loaded by path."""
+    """One of the scripts in tools/ as a module; they live outside the package, so they are loaded by path."""
     spec = importlib.util.spec_from_file_location(script.stem, script)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -373,7 +377,7 @@ class Workflow(unittest.TestCase):
                 self.assertRegex(commit, r"\A[0-9a-f]{40}\Z")
                 self.assertRegex(version, r"\Av[0-9]+\.[0-9]+\.[0-9]+\Z")
         self.assertEqual(self.where("uses"), sorted(f"jobs.{name}.steps.{index}.uses" for name in JOBS[:-1]
-                                                    for index in range(1 if name == "private-words" else 2)))
+                                                    for index in range(1 if name in ("private-words", "faults") else 2)))
 
     def test_every_checkout_drops_the_token_it_was_given(self):
         checkouts = [(name, step) for name, step in self.steps() if step.get("uses", "").startswith("actions/checkout@")]
@@ -410,6 +414,12 @@ class Workflow(unittest.TestCase):
         self.assertEqual([".".join(path) for path, value in everything_in(self.checks) if isinstance(value, str) and "secrets" in value],
                          ["jobs.private-words.steps.2.env.PRIVATE_WORDS"])
 
+    def test_the_job_that_plants_the_faults_installs_nothing_and_lets_no_test_be_skipped(self):
+        """On GitHub every fault's own test can run, so a test skipped there is a fault that nothing was seen to catch."""
+        steps = [{key: value for key, value in step.items() if key != "name"} for step in self.jobs["faults"]["steps"]]
+        self.assertEqual(steps, [{"uses": CHECKOUT, "with": {"persist-credentials": "false"}},
+                                 {"run": "python3 tools/planted_faults.py --no-skips"}])
+
     def test_each_job_runs_exactly_these_commands(self):
         self.assertEqual({name: [step["run"] for step in job["steps"] if "run" in step] for name, job in self.jobs.items()}, COMMANDS)
 
@@ -441,7 +451,7 @@ class Workflow(unittest.TestCase):
             self.skipTest("there is no bash here to run the step's script with")
         step = self.jobs["all-checks"]["steps"][0]
         results = list(step["env"])
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
 
         def ends_with(**told):
             ran = subprocess.run([bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", step["run"]], capture_output=True, text=True,
@@ -449,7 +459,7 @@ class Workflow(unittest.TestCase):
             return ran.returncode, ran.stdout
         status, said = ends_with()
         self.assertEqual(status, 0, said)
-        self.assertEqual(said, "tests success\ncoverage success\npackage success\nmutation success\nprivate-words success\n")
+        self.assertEqual(said, "tests success\ncoverage success\npackage success\nmutation success\nprivate-words success\nfaults success\n")
         for name in results:
             for result in ("failure", "cancelled", "skipped", "", "success-ish", "successful", "Success"):
                 with self.subTest(job=name, result=result):
@@ -461,8 +471,13 @@ class Workflow(unittest.TestCase):
 
     def test_every_job_has_a_time_limit_and_the_scans_own_limit_on_git_is_well_inside_its_jobs(self):
         self.assertEqual({name: job["timeout-minutes"] for name, job in self.jobs.items()},
-                         {"tests": "10", "coverage": "10", "package": "10", "mutation": "20", "private-words": "5", "all-checks": "5"})
+                         {"tests": "10", "coverage": "10", "package": "10", "mutation": "20", "private-words": "5", "faults": "10", "all-checks": "5"})
         self.assertLessEqual(2 * load(ROOT / "tools" / "private_words.py").GIT_SECONDS, 60 * int(self.jobs["private-words"]["timeout-minutes"]))
+
+    def test_the_planted_faults_are_stopped_by_their_own_limits_before_their_jobs(self):
+        """A run that hangs before its first fault is ended by the script, which says why, and not by GitHub, which does not."""
+        script = load(ROOT / "tools" / "planted_faults.py")
+        self.assertLess(script.GIT_SECONDS + script.SECONDS + script.SUITE_SECONDS, 60 * int(self.jobs["faults"]["timeout-minutes"]))
 
     def test_the_tests_run_on_every_python_the_pages_name(self):
         self.assertEqual(self.jobs["tests"]["strategy"], {"fail-fast": "false", "matrix": {"python-version": ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]}})
@@ -512,6 +527,30 @@ class Floors(unittest.TestCase):
         for needed in ('"README.md"', '"CONTRIBUTING.md"', '"pyproject.toml"', '"tools/"', '".github/"'):
             self.assertIn(needed, " ".join(table(self.settings, "tool.mutmut")), needed)
         self.assertIn('cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$RUNNER_TEMP/apart/"\n', COMMANDS["package"][3])
+
+    def test_the_page_has_a_row_for_every_job(self):
+        page = CONTRIBUTING.read_text(encoding="utf-8")
+        table_of_jobs = page.split("\n## What GitHub runs\n", 1)[1].split("\n## ", 1)[0]
+        self.assertEqual(re.findall(r"^\| `([^`]+)` \| .+ \|$", table_of_jobs, re.M), [*JOBS[:-1], "All checks"])
+
+    def test_the_page_gives_the_faults_jobs_command_for_a_contributor_to_run(self):
+        """Without `--no-skips`: on a contributor's computer a test that cannot run there is passed over, and the page says so."""
+        here = COMMANDS["faults"][0].replace(" --no-skips", "")
+        self.assertEqual(here, "python3 tools/planted_faults.py")
+        page = CONTRIBUTING.read_text(encoding="utf-8")
+        self.assertIn("\n" + here + "\n", page)
+        self.assertIn("On GitHub that fails the job (`--no-skips`)", words_of(CONTRIBUTING))
+
+    def test_every_command_the_page_gives_for_the_planted_faults_is_one_the_script_takes(self):
+        script = load(ROOT / "tools" / "planted_faults.py")
+        commands = re.findall(r"^python3 tools/planted_faults\.py(.*)$", CONTRIBUTING.read_text(encoding="utf-8"), re.M)
+        self.assertEqual(commands, ["", " --check", " --only MF"])
+        for flag in re.findall(r"--[\w-]+", " ".join(commands)):
+            self.assertIn(f"[{flag}", script.USAGE)
+        labels = [fault[0] for path in sorted((ROOT / "tools" / "faults").glob("*.py")) for fault in runpy.run_path(str(path))["FAULTS"]]
+        self.assertTrue(any(label.startswith("MF") for label in labels))
+        self.assertEqual(script.SECONDS, 120)
+        self.assertIn("**CANNOT SAY.** The test did not finish within two minutes", words_of(CONTRIBUTING))
 
     def test_the_page_gives_the_package_jobs_own_commands_for_a_contributor_to_run(self):
         """A contributor's own check must fail where GitHub's would.
