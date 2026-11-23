@@ -24,10 +24,17 @@ takes the chance away by fixing the hash seed. E112 and E113 break the same two
 orders with no chance in it, and each names the test that compares the order.
 The fourth gate's reviewer proposed those two (`G4f`) in the review of the
 script that plants these faults.
+
+E114 to E135 came with the change that made `rule_space` check what it is given
+(issue #3). The AI coding assistant planted them against its own change, one
+or more for each thing the function now refuses or leaves out, and they carry
+the tag `u5` for the work unit. E017 and E021 were written again for the same
+change: the lines they edit moved.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
                  "src/wrong_person/riddles.json", "tests/test_readme.py")
+RS = "test_engine.TheRuleSpace."
 
 FAULTS = [
     # ---- behaviour that was right but unpinned
@@ -85,8 +92,8 @@ FAULTS = [
      [(E, "    for scope in SCOPES:\n        for match in", "    for scope in CONTAINERS:\n        for match in")]),
     ("E017 [G4-R2] rule_space drops the negative letter rules",
      "test_engine.Semantics.test_the_rule_space_is_the_whole_vocabulary", [
-        (E, "                for positive in (True, False):\n                    yield Rule(scope, match, value, positive)",
-            "                for positive in (True,):\n                    yield Rule(scope, match, value, positive)")]),
+        (E, "                for positive in (True, False):\n                    space.append(Rule(scope, match, value, positive))",
+            "                for positive in (True,):\n                    space.append(Rule(scope, match, value, positive))")]),
     ("E018 [G4-R3] rule_space drops the rules about named people",
      "test_engine.Semantics.test_the_rule_space_is_the_whole_vocabulary",
      [(E, "        for name in named:\n", "        for name in ():\n")]),
@@ -98,7 +105,7 @@ FAULTS = [
      [(E, "    for scope in SCOPES:\n        for match in", "    return\n    for scope in SCOPES:\n        for match in")]),
     ("E021 [G4-R6] rule_space uses only the first letter set",
      "test_engine.Semantics.test_the_rule_space_is_the_whole_vocabulary",
-     [(E, "for value in letter_sets:", "for value in list(letter_sets)[:1]:")]),
+     [(E, "            for value in letter_sets:", "            for value in list(letter_sets)[:1]:")]),
     ("E022 [G4-A6] killer raises when nobody is left",
      "test_engine.WholeCase.test_audit_catches_no_answer",
      [(E, "if len(self.survivors) == 1 else None", "if len(self.survivors) <= 1 else None")]),
@@ -414,4 +421,78 @@ FAULTS = [
      "test_engine.WholeCase.test_a_broken_saved_case_is_refused", [
         (E, "    except (ValueError, RecursionError) as error:\n        raise ValueError(f\"a saved case must be JSON",
             "    except ValueError as error:\n        raise ValueError(f\"a saved case must be JSON")]),
+    # ---- rule_space checks what it is given (issue #3)
+    ("E114 [u5] a named person who is not on the board is let through",
+     RS + "test_a_named_person_must_be_on_the_board",
+     [(E, "        if name.upper() not in board.upper:\n", "        if False:\n")]),
+    ("E115 [u5] a named person is looked for in the case given",
+     RS + "test_a_named_person_is_found_whatever_the_case_and_kept_as_given",
+     [(E, "        if name.upper() not in board.upper:\n", "        if name not in board.names:\n")]),
+    ("E116 [u5] rule_space names the killer outright again",
+     RS + "test_the_killer_is_never_named_outright",
+     [(E, '                if (scope, positive) != ("name", True):\n', "                if True:\n")]),
+    ("E117 [u5] the rule of the last clue is left out with the one that names the killer",
+     RS + "test_the_killer_is_never_named_outright",
+     [(E, '                if (scope, positive) != ("name", True):\n', '                if scope != "name":\n')]),
+    ("E118 [u5] one piece of text is walked letter by letter as letter sets",
+     RS + "test_one_piece_of_text_is_not_a_list",
+     [(E, "        if not isinstance(given, (list, tuple)):\n",
+          '        if not isinstance(given, (list, tuple)) and (what, type(given)) != ("letter sets", str):\n')]),
+    ("E119 [u5] one piece of text is walked letter by letter as named people",
+     RS + "test_one_piece_of_text_is_not_a_list",
+     [(E, "        if not isinstance(given, (list, tuple)):\n",
+          '        if not isinstance(given, (list, tuple)) and (what, type(given)) != ("named people", str):\n')]),
+    ("E120 [u5] bytes are taken where a list is meant",
+     RS + "test_one_piece_of_text_is_not_a_list",
+     [(E, "        if not isinstance(given, (list, tuple)):\n", "        if not isinstance(given, (list, tuple, bytes)):\n")]),
+    ("E121 [u5] anything that can be walked is taken, text aside: a set, a generator",
+     RS + "test_only_a_list_or_a_tuple_is_taken",
+     [(E, "        if not isinstance(given, (list, tuple)):\n",
+          '        if isinstance(given, (str, bytes)) or not hasattr(given, "__iter__"):\n')]),
+    ("E122 [u5] a tuple is refused where a list is taken",
+     RS + "test_a_tuple_is_taken_as_a_list_is",
+     [(E, "        if not isinstance(given, (list, tuple)):\n", "        if not isinstance(given, list):\n")]),
+    ("E123 [u5] the space can be walked only once",
+     RS + "test_the_space_is_a_tuple",
+     [(E, "    return tuple(space)\n", "    return iter(space)\n")]),
+    ("E124 [u5] a name is checked before the letter sets",
+     RS + "test_the_first_thing_wrong_is_the_one_named",
+     [(E, '        Rule("name", "contains", value)         # made only to be checked: Rule refuses what is no letter set\n',
+          "        pass\n")]),
+    ("E125 [u5] a name that is no name gets Python's complaint and not the engine's",
+     RS + "test_what_is_wrong_is_refused_at_the_call",
+     [(E, '        Rule("name", "is", name)                # likewise, for what is no name\n', "")]),
+    ("E126 [u5] the named people are looked at before the letter sets are seen to be a list",
+     RS + "test_the_first_thing_wrong_is_the_one_named",
+     [(E, '(("letter sets", letter_sets), ("named people", named))', '(("named people", named), ("letter sets", letter_sets))')]),
+    ("E127 [u5] what is given twice comes out once",
+     RS + "test_what_is_given_twice_comes_out_twice",
+     [(E, "    return tuple(space)\n", "    return tuple(dict.fromkeys(space))\n")]),
+    ("E128 [u5] a letter set that repeats a letter is found only after the names",
+     RS + "test_the_first_thing_wrong_is_the_one_named",
+     [(E, '        Rule("name", "contains", value)         # made only', '        Rule("name", "is", value)         # made only')]),
+    ("E129 [u5] only the first letter set is checked before the names",
+     RS + "test_the_first_thing_wrong_is_the_one_named",
+     [(E, "    for value in letter_sets:\n        Rule(", "    for value in letter_sets[:1]:\n        Rule(")]),
+    ("E130 [u5] the scopes come in another order",
+     RS + "test_the_rules_come_in_one_order",
+     [(E, "    for scope in SCOPES:\n        for match in", "    for scope in SCOPES[::-1]:\n        for match in")]),
+    ("E131 [u5] a letter rule comes against before for",
+     RS + "test_the_rules_come_in_one_order", [
+        (E, "                for positive in (True, False):\n                    space.append(Rule(scope, match, value, positive))",
+            "                for positive in (False, True):\n                    space.append(Rule(scope, match, value, positive))")]),
+    ("E132 [u5] the rules come letter set by letter set, not match by match",
+     RS + "test_the_rules_come_in_one_order", [
+        (E, '        for match in ("contains", "begins", "ends"):\n            for value in letter_sets:\n',
+            '        for value in letter_sets:\n            for match in ("contains", "begins", "ends"):\n')]),
+    ("E133 [u5] a rule about a named person comes against before for",
+     RS + "test_the_rules_come_in_one_order", [
+        (E, "            for positive in (True, False):\n                if (scope, positive)",
+            "            for positive in (False, True):\n                if (scope, positive)")]),
+    ("E134 [u5] the space comes back as a list, which can be edited",
+     RS + "test_the_space_is_a_tuple",
+     [(E, "    return tuple(space)\n", "    return space\n")]),
+    ("E135 [u5] nothing given gives nothing back at all",
+     RS + "test_nothing_given_is_an_empty_space",
+     [(E, "    space = []\n", "    space = []\n    if not letter_sets and not named:\n        return None\n")]),
 ]
