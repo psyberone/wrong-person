@@ -361,39 +361,44 @@ class TheRuleSpace(unittest.TestCase):
             self.assertEqual(str(refused.exception), said)
 
     def test_the_rules_come_in_one_order(self):
-        letter_sets, named = ["HELP", "A"], ["Michael", "Carrie"]      # neither is in the order of the alphabet
+        letter_sets, named = ["HELP", "A", "CLUE"], ["Michael", "Ruth", "Carrie"]      # orders that no sort gives
         space = e.rule_space(self.b, letter_sets, named)
         self.assertEqual([scope for scope, _ in itertools.groupby(rule.scope for rule in space)],
                          ["name", "line", "page", "chapter", "next_to", "near"])
         on_a_line = [(r.match, r.value, r.positive) for r in space if r.scope == "line"]
         self.assertEqual(on_a_line, [
             ("contains", "HELP", True), ("contains", "HELP", False), ("contains", "A", True), ("contains", "A", False),
+            ("contains", "CLUE", True), ("contains", "CLUE", False),
             ("begins", "HELP", True), ("begins", "HELP", False), ("begins", "A", True), ("begins", "A", False),
+            ("begins", "CLUE", True), ("begins", "CLUE", False),
             ("ends", "HELP", True), ("ends", "HELP", False), ("ends", "A", True), ("ends", "A", False),
-            ("is", "Michael", True), ("is", "Michael", False), ("is", "Carrie", True), ("is", "Carrie", False)])
-        self.assertEqual((letter_sets, named), (["HELP", "A"], ["Michael", "Carrie"]))   # and are left as they were
+            ("ends", "CLUE", True), ("ends", "CLUE", False),
+            ("is", "Michael", True), ("is", "Michael", False), ("is", "Ruth", True), ("is", "Ruth", False),
+            ("is", "Carrie", True), ("is", "Carrie", False)])
+        self.assertEqual((letter_sets, named), (["HELP", "A", "CLUE"], ["Michael", "Ruth", "Carrie"]))   # and are left so
         for scope in ("page", "chapter", "next_to", "near"):
             self.assertEqual([(r.match, r.value, r.positive) for r in space if r.scope == scope], on_a_line)
         self.assertEqual([(r.match, r.value, r.positive) for r in space if r.scope == "name"],
                          [rule for rule in on_a_line if rule[0] != "is" or not rule[2]])   # the same, less the killer's own
 
     def test_each_list_is_copied_once_so_what_was_checked_is_what_is_used(self):
-        class Shifty(list):
-            """A list that holds something else each time it is walked after the first."""
+        def shifty(kind, at_first, later):
+            """A list or a tuple that holds something else each time it is walked after the first."""
+            class Shifty(kind):
+                walks = 0
 
-            def __init__(self, at_first, later):
-                super().__init__(at_first)
-                self.later, self.walks = later, 0
+                def __iter__(self):
+                    self.walks += 1
+                    return super().__iter__() if self.walks == 1 else iter(later)
 
-            def __iter__(self):
-                self.walks += 1
-                return super().__iter__() if self.walks == 1 else iter(self.later)
+            return Shifty(at_first)
 
-        named = Shifty(["Ruth"], ["Zebedee"])
-        self.assertEqual(e.rule_space(self.b, [], named), e.rule_space(self.b, [], ["Ruth"]))
-        letter_sets = Shifty(["A"], ["HELP"])
-        self.assertEqual(e.rule_space(self.b, letter_sets, []), e.rule_space(self.b, ["A"], []))
-        self.assertEqual((named.walks, letter_sets.walks), (1, 1))
+        for kind in (list, tuple):
+            named = shifty(kind, ["Ruth"], ["Zebedee"])
+            self.assertEqual(e.rule_space(self.b, [], named), e.rule_space(self.b, [], ["Ruth"]))
+            letter_sets = shifty(kind, ["A"], ["HELP"])
+            self.assertEqual(e.rule_space(self.b, letter_sets, []), e.rule_space(self.b, ["A"], []))
+            self.assertEqual((named.walks, letter_sets.walks), (1, 1))
 
     def test_what_is_given_twice_comes_out_twice(self):
         self.assertEqual(len(e.rule_space(self.b, ["A", "A"])), 72)

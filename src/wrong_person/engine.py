@@ -223,7 +223,7 @@ def rule_space(board, letter_sets, named=()):
     for what, given in (("letter sets", letter_sets), ("named people", named)):
         if not isinstance(given, (list, tuple)):
             raise ValueError(f"{what} must be a list or a tuple, got {given!r}")
-    letter_sets, named = tuple(letter_sets), tuple(named)      # read once: what is checked is what is used
+    letter_sets, named = tuple(letter_sets), tuple(named)      # copied once: what is checked is what is used
     for value in letter_sets:
         Rule("name", "contains", value)         # made only to be checked: Rule refuses what is no letter set
     for name in named:

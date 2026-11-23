@@ -34,14 +34,20 @@ words E021 replaces came to stand in two places. E020 put a bare `return`
 before the loops, which made a generator yield nothing and would make the
 function of today give back `None`; it gives back an empty space now.
 
-E136 to E152 came from the review of that change, and carry the tag `u5r`.
-Five AI reviewers planted faults of their own in the function. E136 to E147
-and E151 are the ones that no test caught, with one that was caught only on
-some runs (E144). Each names the test that was added or made stronger for it.
-E143 and E152 were caught by the tests as they stood, and stood in no list.
-E148 to E150 are for the one change the review brought to the function
-itself: it copies each of its lists once, so that what it checked is what it
-uses.
+E136 to E158 came from the review of that change, and carry the tag `u5r`.
+Five AI reviewers planted faults of their own in the function, in two rounds.
+E136 to E142, E145 to E147 and E151 are faults of theirs that no test caught,
+and E144 is one that was caught only on some runs. Each names the test that
+was added or made stronger for it. E143 and E152 are faults of theirs that
+the tests caught as they stood, and that stood in no list. E148 to E150 are
+the AI coding assistant's, for the one change the review brought to the
+function itself: it copies each of its lists once, so that what it checked is
+what it uses. E153 to E158 are the reviewers' again, from their second
+reading. E153 to E156 passed the tests of the first fix, which gave the order
+test two letter sets and two names (two things are always in one sorted order
+or its reverse) and tried the copy with a list only. E157 and E158 change the
+caller's own lists once they are copied: the tests caught them as they stood,
+and they stood in no list.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -550,7 +556,7 @@ FAULTS = [
           "    if isinstance(letter_sets, list):\n        letter_sets.sort()\n    letter_sets, named = tuple(letter_sets), tuple(named)")]),
     ("E148 [u5r] the lists are read again when the rules are made",
      RS + "test_each_list_is_copied_once_so_what_was_checked_is_what_is_used",
-     [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)      # read once: what is checked is what is used\n", "")]),
+     [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)      # copied once: what is checked is what is used\n", "")]),
     ("E149 [u5r] the letter sets are read again when the rules are made",
      RS + "test_each_list_is_copied_once_so_what_was_checked_is_what_is_used",
      [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)", "    letter_sets, named = letter_sets, tuple(named)")]),
@@ -564,4 +570,27 @@ FAULTS = [
     ("E152 [u5r] nothing is checked until the space is walked: a generator again",
      RS + "test_what_is_wrong_is_refused_at_the_call",
      [(E, "    return tuple(space)\n", "    yield from space\n")]),
+    ("E153 [u5r] only a list is copied: a tuple of any kind is used as it is",
+     RS + "test_each_list_is_copied_once_so_what_was_checked_is_what_is_used",
+     [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)",
+          "    letter_sets, named = (tuple(given) if isinstance(given, list) else given for given in (letter_sets, named))")]),
+    ("E154 [u5r] the letter sets come out in the order of the alphabet backwards",
+     RS + "test_the_rules_come_in_one_order",
+     [(E, "            for value in letter_sets:\n", "            for value in sorted(letter_sets, reverse=True):\n")]),
+    ("E155 [u5r] the named people come out in the order of the alphabet backwards",
+     RS + "test_the_rules_come_in_one_order",
+     [(E, "        for name in named:\n", "        for name in sorted(named, key=str.upper, reverse=True):\n")]),
+    ("E156 [u5r] the letter sets are put in the order of the alphabet backwards before the rules are made",
+     RS + "test_the_rules_come_in_one_order",
+     [(E, "    space = []\n", "    letter_sets = sorted(letter_sets, reverse=True)\n    space = []\n")]),
+    ("E157 [u5r] the caller's own list of letter sets is turned round once it is copied",
+     RS + "test_the_rules_come_in_one_order",
+     [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)      # copied once: what is checked is what is used\n",
+          "    theirs, letter_sets, named = letter_sets, tuple(letter_sets), tuple(named)\n"
+          "    if isinstance(theirs, list):\n        theirs.reverse()\n")]),
+    ("E158 [u5r] the caller's own list of names is emptied once it is copied",
+     RS + "test_the_rules_come_in_one_order",
+     [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)      # copied once: what is checked is what is used\n",
+          "    theirs, letter_sets, named = named, tuple(letter_sets), tuple(named)\n"
+          "    if isinstance(theirs, list):\n        theirs.clear()\n")]),
 ]
