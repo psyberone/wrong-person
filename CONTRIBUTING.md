@@ -122,7 +122,7 @@ the package and for everything `mutmut` does not reach.
 | --- | --- |
 | `package.py` | The package, its riddle table and the README's example |
 | `checks.py` | The scan, the mutation floor, the workflow, `pyproject.toml` and this page |
-| `runner.py` | The script that plants the faults, and for one fault a list itself |
+| `runner.py` | The script that plants the faults; for one fault a list itself, and for two the script's own tests |
 
 Where they came from: every one was planted by an AI. AI reviewers planted
 some while reviewing the pull requests, to see whether the tests would notice,

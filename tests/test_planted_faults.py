@@ -74,6 +74,11 @@ def a_list(*faults):
     return f"FAULTS = {list(faults)!r}\n"
 
 
+def depth(mark):
+    """How many runs of the script a process with this depth mark is inside: 0, 1, or 2 for any mark that the script refuses."""
+    return {None: 0, "0": 0, "1": 1}.get(mark, 2)
+
+
 def everything_in(folder):
     """Every file under a folder with its bytes and the time it was last written, git's own folder apart."""
     return {str(path.relative_to(folder)): (path.read_bytes(), path.stat().st_mtime_ns)
@@ -855,8 +860,12 @@ class Children(SmallRepository):
                 self.cannot_vouch(KILLED, said=["more than two deep"])
 
     def test_each_run_tells_what_it_starts_and_what_it_reads_how_deep_it_is(self):
-        """Tried from every depth a run may start at, whatever depth these tests are run at themselves: no mark, "0", and "1"."""
+        """Tried from each depth a run may start at (no mark, "0", "1"), but from none less deep than these tests were started themselves."""
+        started = depth(os.environ.get(self.script.DEPTH))
+        self.assertLess(started, 2, "these tests were started two deep or deeper, or under a mark that is no depth, and from there no run is started")
         for found, told, left in ((None, "1", "0"), ("0", "1", "0"), ("1", "2", "1")):
+            if depth(found) < started:
+                continue
             with self.subTest(found=found), mock.patch.dict(os.environ):
                 os.environ.pop(self.script.DEPTH, None)
                 if found is not None:
@@ -866,6 +875,28 @@ class Children(SmallRepository):
                 status, out, err = self.planted(lists=lists)
                 self.assertEqual(status, 0, out + err)
                 self.assertEqual(os.environ.get(self.script.DEPTH), left)
+
+    def test_no_run_is_told_that_it_is_less_deep_than_these_tests_were_started(self):
+        """The depth is what ends a chain of runs that start each other, so a test may set it deeper and never back.
+
+        The test of depths, started one deep, tries that depth alone. Started two deep it fails, and starts nothing.
+        """
+        for mark, runs, passes in (("1", ["1"], True), ("2", [], False)):
+            if depth(mark) < depth(os.environ.get(self.script.DEPTH)):
+                continue
+            found, result = [], unittest.TestResult()
+
+            def main(*args, real=self.script.main, **more):
+                found.append(os.environ.get(self.script.DEPTH))
+                return real(*args, **more)
+
+            with self.subTest(mark=mark), mock.patch.dict(os.environ, {self.script.DEPTH: mark}), mock.patch.object(self.script, "main", main):
+                type(self)("test_each_run_tells_what_it_starts_and_what_it_reads_how_deep_it_is").run(result)
+                said = "".join(text for _, text in result.failures + result.errors)
+                self.assertEqual(found, runs, said)
+                self.assertEqual((result.testsRun, result.wasSuccessful()), (1, passes), said)
+                if not passes:
+                    self.assertIn("from there no run is started", said)
 
     def test_what_a_test_prints_goes_nowhere(self):
         """Held in memory, what a test printed without end would take all the memory there is long before its time was up."""
@@ -956,7 +987,7 @@ class TheLists(unittest.TestCase):
     def test_each_list_holds_as_many_faults_as_it_did(self):
         """To add a fault, or to retire one, change its list's number here in the same pull request."""
         held = {path.name: len(runpy.run_path(str(path))["FAULTS"]) for path in sorted((ROOT / "tools" / "faults").glob("*.py"))}
-        self.assertEqual(held, {"checks.py": 297, "package.py": 113, "runner.py": 147})
+        self.assertEqual(held, {"checks.py": 297, "package.py": 113, "runner.py": 149})
 
 
 class RunAsAProgram(SmallRepository):

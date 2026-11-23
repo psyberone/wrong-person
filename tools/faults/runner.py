@@ -11,15 +11,19 @@ of the five gates read the script: each is planted against a fix made for one
 of their findings. None of them makes a test wait for more than about ten
 seconds: the faults that take a time limit away are tried on tests that end by
 themselves after ten. N139 and N141 to N147 were added when the reviewers read
-those fixes: N139 holds a fix for something the fixes themselves brought in,
-and N141 to N147 are faults of the reviewers' own, on lines of the fixes, that
-no test caught until then.
+those fixes: N139 holds a fix for something the fixes themselves brought in.
+N141 and N143 to N147 are faults of the reviewers' own, on lines of the fixes,
+that no test caught until then, and N142 is one half of such a fault, held
+apart. N148 and N149 came with the reading after that: one of the script's
+tests set the depth of a run back, and they hold the fix to that test.
 
-One of these is planted elsewhere: N118 takes a fault out of another list, to
-show that a fault cannot be deleted quietly. N136 and N140 are planted in the
-script like the others, and the test each names is among the workflow's.
+Three of these are planted elsewhere: N118 takes a fault out of another list,
+to show that a fault cannot be deleted quietly, and N148 and N149 are planted
+in the script's own tests. N136 and N140 are planted in the script like the
+others, and the test each names is among the workflow's.
 """
 PF = "tools/planted_faults.py"
+ITS_TESTS = "tests/test_planted_faults.py"
 TESTS = "test_planted_faults."
 BS = chr(92)
 
@@ -306,6 +310,12 @@ FAULTS = [
     ("N147 when a run ends the depth is left at none, however deep the run was started",
      TESTS + "Children.test_each_run_tells_what_it_starts_and_what_it_reads_how_deep_it_is",
      [(PF, 'os.environ[DEPTH] = before or "0"', 'os.environ[DEPTH] = "0"')]),
+    ("N148 the test of depths tries every depth, however deep the tests were started themselves",
+     TESTS + "Children.test_no_run_is_told_that_it_is_less_deep_than_these_tests_were_started",
+     [(ITS_TESTS, "if depth(found) < started:", "if False:")]),
+    ("N149 started two deep, the test of depths passes, having tried nothing",
+     TESTS + "Children.test_no_run_is_told_that_it_is_less_deep_than_these_tests_were_started",
+     [(ITS_TESTS, "self.assertLess(started, 2, ", "self.assertLess(started, 3, ")]),
     # ---- the lists
     ("N30 two faults may share a label",
      TESTS + "Refusals.test_two_faults_may_not_share_a_label",
