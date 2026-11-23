@@ -471,7 +471,7 @@ class Workflow(unittest.TestCase):
 
     def test_every_job_has_a_time_limit_and_the_scans_own_limit_on_git_is_well_inside_its_jobs(self):
         self.assertEqual({name: job["timeout-minutes"] for name, job in self.jobs.items()},
-                         {"tests": "10", "coverage": "10", "package": "10", "mutation": "20", "private-words": "5", "faults": "10", "all-checks": "5"})
+                         {"tests": "10", "coverage": "10", "package": "10", "mutation": "20", "private-words": "5", "faults": "30", "all-checks": "5"})
         self.assertLessEqual(2 * load(ROOT / "tools" / "private_words.py").GIT_SECONDS, 60 * int(self.jobs["private-words"]["timeout-minutes"]))
 
     def test_the_planted_faults_are_stopped_by_their_own_limits_before_their_jobs(self):
