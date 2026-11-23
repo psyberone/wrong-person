@@ -1,4 +1,4 @@
-"""Planted faults in the checks themselves: the two scripts under tools/, the workflow, the settings and the contributing page.
+"""Planted faults in the checks themselves: the scan and the mutation floor under tools/, the workflow, the settings and the contributing page.
 
 Each entry is a label, the full name of the one test meant to catch the fault,
 and the edits that plant it: (file, the text to replace, what replaces it; None
@@ -6,13 +6,17 @@ for the text to replace adds the file). `python3 tools/planted_faults.py`
 plants each one in a copy of the repository and sees that its test fails.
 CONTRIBUTING.md says how to add one.
 
-These were planted by hand during the three reviews of the repository checks,
-by the AI reviewers and by the AI coding assistant that wrote the fixes. The
-tag in square brackets says where a fault came from: G1 to G5 are the reviewers
-of the five gates, each with that reviewer's own name for the fault, and M with
-a number is the review finding whose fix the fault was planted against. Where
-several tests fail for a fault, the test named is the one whose name says what
-the fault breaks.
+Most were planted by hand during the three reviews of the repository checks,
+by the AI reviewers and by the AI coding assistant that wrote the fixes. J01 to
+J14 are later: the coding assistant wrote them with the job that plants these
+faults. A tag in square brackets says where a fault came from: G1 to G5 are the
+reviewers of the five gates, each with that reviewer's own name for the fault,
+and M with a number is the review finding whose fix the fault was planted
+against. For L01 to L18 the tag is the name the fault had in the third review.
+A fault with no tag was planted by a reviewer or by the coding assistant, and
+this list does not record which. Where several tests fail for a fault, the test
+named is the one that fails for the fewest faults. Where the name of another
+failing test says what the fault breaks, that test was chosen by hand instead.
 
 Three faults from those reviews are not here, because no single test can be
 named for them. CONTRIBUTING.md tells what became of each.
@@ -184,7 +188,7 @@ FAULTS = [
     ("T04b [M4] only the reading with the NULs taken out",
      "test_private_words.Scan.test_a_file_with_nuls_in_it_is_read_as_it_is_as_well_as_without_them",
      [(PW, "    return holds(text_of(data)) or (", "    return (b" + '"' + BS + '0" not in data and holds(text_of(data))) or (')]),
-    ("T05 [M26] a name can carry ##[ into the log",
+    ("T05 [M26] a name can carry the mark that opens a command into the log",
      "test_private_words.Scan.test_a_file_name_cannot_pass_itself_off_as_a_command_to_the_runner",
      [(PW, '.replace("##[", "#' + BS * 2 + 'u0023[")', "")]),
     ("T06 names are printed raw",
@@ -928,7 +932,14 @@ FAULTS = [
      [(CO, "more about it below)\npython3 tools/planted_faults.py\n", "more about it below)\npython3 tools/planted_faults.py --check\n")]),
     ("J14 the page does not say that on GitHub a skipped test fails the job",
      "test_workflow.Floors.test_the_page_gives_the_faults_jobs_command_for_a_contributor_to_run",
-     [(CO, "On GitHub that fails the job (`--no-skips`); on your computer it is\n  passed over.", "It is passed over.")]),
+     [(CO, "On GitHub that fails the job (`--no-skips`); on your\n  computer it is passed over.", "It is passed over.")]),
+    ("J15 the page gives a flag that the script does not have",
+     "test_workflow.Floors.test_every_command_the_page_gives_for_the_planted_faults_is_one_the_script_takes",
+     [(CO, "python3 tools/planted_faults.py --check\n", "python3 tools/planted_faults.py --fits\n")]),
+    ("J16 the script's flag is given another name and the page is not",
+     "test_workflow.Floors.test_every_command_the_page_gives_for_the_planted_faults_is_one_the_script_takes",
+     [("tools/planted_faults.py", '[--no-skips] [--check]"', '[--no-skips] [--fits]"'),
+      ("tools/planted_faults.py", '        elif arg == "--check":', '        elif arg == "--fits":')]),
     # ---- the third review of the repository checks
     ("L01 [H7] what follows the last hash in a message is not read",
      "test_private_words.Scan.test_a_word_after_the_last_hash_in_a_message_is_found",

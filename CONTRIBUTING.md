@@ -124,26 +124,32 @@ the package and for everything `mutmut` does not reach.
 | `checks.py` | The scan, the mutation floor, the workflow, `pyproject.toml` and this page |
 | `runner.py` | The script that plants the faults |
 
-Where they came from: AI reviewers planted most of them while reviewing the
-first pull requests, to see whether the tests would notice, and the AI coding
-assistant planted the rest while writing the fixes. They were kept outside the
-repository until [#6](https://github.com/psyberone/wrong-person/issues/6).
+Where they came from: every one was planted by an AI. AI reviewers planted
+some while reviewing the pull requests, to see whether the tests would notice,
+and the AI coding assistant planted the others while writing the code and the
+fixes. Each list says at its top what its labels show of that. The faults of
+the first reviews were kept outside the repository until
+[#6](https://github.com/psyberone/wrong-person/issues/6).
 
 Each fault is a label, the full name of the one test meant to catch it, and one
 or more edits. `python3 tools/planted_faults.py` copies the repository to a
-scratch folder and sees that the whole suite passes there. Then, for each
-fault, it makes the edits in the copy, runs the test the fault names, and takes
-the edits out again. Your own files are never changed. It needs only Python and
-git, and takes a few minutes. Each fault ends as one of four things:
+scratch folder. There, with no fault planted, it sees that the whole suite
+passes, and that each test a fault names does not fail when it is run alone,
+which is how it is run under its fault. Then, for each fault, it makes the
+edits in the copy, runs the test the fault names, and takes the edits out
+again. Your own files are never changed. It needs only Python and git, and
+takes a few minutes. Each fault ends as one of four things:
 
-- **killed.** The test it names ran and failed. This is what should happen.
+- **killed.** The test it names ran and failed in its own body. This is what
+  should happen.
 - **SURVIVED.** The test passed with the fault in place. The run fails.
-- **skipped here.** The test was skipped on this computer, so nothing was
-  learned. On GitHub that fails the job (`--no-skips`); on your computer it is
-  passed over. On a Mac one fault is skipped: its test needs a file name that
-  is not UTF-8, and a Mac's disk refuses to hold one.
+- **skipped here.** The test, or one case of it, was skipped on this computer,
+  so nothing was learned. On GitHub that fails the job (`--no-skips`); on your
+  computer it is passed over. On a Mac one fault is skipped: its test needs a
+  file name that is not UTF-8, and a Mac's disk refuses to hold one.
 - **CANNOT SAY.** The test did not finish within two minutes, could not be
-  loaded, or never got to run. The run fails.
+  loaded, or failed somewhere other than its own body: in what it or its class
+  sets up first, or in what they clear up afterwards. The run fails.
 
 ```console
 # only see that every fault still fits; runs no test and takes a second
@@ -153,12 +159,14 @@ python3 tools/planted_faults.py --check
 python3 tools/planted_faults.py --only MF
 ```
 
-**"Cannot be planted."** Before any test runs, the script sees that every fault
-still fits: the text each edit replaces must be found exactly once in its file,
-and the test it names must be there. If your change touches a line that a fault
-points at, or renames a test that a fault names, the run stops and lists every
-fault that no longer fits. Aim each one at the new line, in the same pull
-request. Never delete a fault to get a green run.
+**A fault that no longer fits.** Before any test runs, the script sees that
+every fault still fits: the text each edit replaces must be found at exactly
+one place in its file, and the test it names must be there. If your change
+touches a line that a fault points at, or renames a test that a fault names,
+the run stops with "cannot vouch" and lists every fault that "cannot be tried"
+as it stands. Aim each one at the new line, in the same pull request. Never
+delete a fault to get a green run: a test holds the number of faults in each
+list, and fails when one is gone.
 
 **Adding one.** New behaviour wants a fault as well as a test. Add an entry to
 the list that fits:
@@ -171,9 +179,12 @@ the list that fits:
 
 The first word of the label must be unlike every other fault's. Take enough of
 the line that the text is found only once. `None` in place of the text to
-replace adds a file that is not there. Then run it alone with `--only` and see
-it killed. A fault must leave its test able to run and to finish: one that
-makes the test wait for ever, or breaks what the test sets up first, cannot be
+replace adds a file that is not there. A list is a `.py` file in
+`tools/faults/` itself; any other file under that folder stops the run. Then
+run the fault alone with `--only` and see it killed, and add one to its list's
+number in `TheLists` in `tests/test_planted_faults.py`. A fault must leave its
+test able to run and to finish: one that makes the test wait for more than two
+minutes, or breaks what the test sets up before its own body runs, cannot be
 judged.
 
 A fault must be killed on every run, not on most. If what it breaks depends on
@@ -245,10 +256,16 @@ as well.
   the test hold it again. If the fault is killed when you run it again, and no
   line it touches was changed, what it breaks depends on chance, and it names
   the wrong test ([above](#the-planted-faults)).
-- **`faults` says it cannot vouch.** Most often a fault cannot be planted: the
-  change touched the line it points at, or renamed its test. The run names each
-  one; aim it at the new line ([above](#the-planted-faults)). It also says so
-  when a test that a fault names was skipped on GitHub, or could not be judged.
+- **`faults` says it cannot vouch.** The one sentence it prints says why. Most
+  often a fault no longer fits: the change touched the line it points at, or
+  renamed its test. The run names each one; aim it at the new line
+  ([above](#the-planted-faults)). It also says so when a test that a fault
+  names was skipped on GitHub, or could not be judged. And it says so when a
+  test fails with no fault planted. Then `tests` is red too, and that is the
+  job to look at first. If only `faults` is red, the test fails in the copy
+  alone, or when it is run alone: the run names it. The copy holds the files
+  that git knows of or does not ignore, and neither the `.git` folder nor a
+  link.
 - **`All checks` is red.** It is red whenever another job failed, was stopped,
   was skipped or ran out of time. It prints each job's result; look at the job
   that did not succeed.

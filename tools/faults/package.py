@@ -8,15 +8,21 @@ and sees that its test fails. CONTRIBUTING.md says how to add one.
 These were planted by hand during the reviews of the first work units, by the
 AI reviewers and by the AI coding assistant that wrote the fixes. The tag in
 square brackets is the name a fault had in the review it came from: G1 to G5
-are the reviewers of the five gates, and `own` marks a fault the coding
-assistant planted against its own fix. Where several tests fail for a fault,
-the test named is the one whose name says what the fault breaks.
+are the reviewers of the five gates, S with a number is the review finding
+whose fix the fault was planted against, `own` marks a fault the coding
+assistant planted against its own fix, and `mutmut` marks one that `mutmut`
+made first. Where several tests fail for a fault, the test named is the one
+that fails for the fewest faults. Where the name of another failing test says
+what the fault breaks, that test was chosen by hand instead.
 
-Three faults are the exception (E035, E099, E100). What they break depends on
-chance: the order Python walks a set in, or a hash, both of which change from
-one run to the next. The test whose name says what is broken compares one order
-with another and so passes on some runs: 1 in 24 for E099. These three name the
-test that takes the chance away by fixing the hash seed.
+Three faults name their test for another reason (E035, E099, E100). What they
+break depends on chance: the order Python walks a set in, or a hash, both of
+which change from one run to the next. A test that compares one order with
+another passes on some runs: 1 in 24 for E099. These three name the test that
+takes the chance away by fixing the hash seed. E112 and E113 break the same two
+orders with no chance in it, and each names the test that compares the order.
+The fourth gate's reviewer proposed those two (`G4f`) in the review of the
+script that plants these faults.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -360,6 +366,13 @@ FAULTS = [
         (E, "    return [i for i in survivors(list(rules)[:-1], board) if i != killer]",
             "    found = [i for i in survivors(list(rules)[:-1], board) if i != killer]\n"
             "    return sorted(found, key=lambda i: hash(board.names[i]))")]),
+    ("E112 [G4f-D1] named people are walked in the order of the alphabet",
+     "test_engine.Semantics.test_named_people_come_in_the_order_given",
+     [(E, "        for name in named:\n", "        for name in sorted(named):\n")]),
+    ("E113 [G4f-D2] decoys come back last first",
+     "test_engine.WholeCase.test_decoys_come_back_in_board_order", [
+        (E, "    return [i for i in survivors(list(rules)[:-1], board) if i != killer]",
+            "    return [i for i in survivors(list(rules)[:-1], board) if i != killer][::-1]")]),
     # K38 as the reviewer planted it (True refused as a size) is what the code now does, by the
     # owner's ruling on S13; its opposite is below. K57 (a saved case that is not text at all
     # becomes a ValueError) and K58 are accepted under S18 and are not planted.

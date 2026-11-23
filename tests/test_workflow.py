@@ -16,6 +16,7 @@ can hide in a piece of syntax that it skips.
 import importlib.util
 import os
 import re
+import runpy
 import shutil
 import subprocess
 import unittest
@@ -473,6 +474,11 @@ class Workflow(unittest.TestCase):
                          {"tests": "10", "coverage": "10", "package": "10", "mutation": "20", "private-words": "5", "faults": "10", "all-checks": "5"})
         self.assertLessEqual(2 * load(ROOT / "tools" / "private_words.py").GIT_SECONDS, 60 * int(self.jobs["private-words"]["timeout-minutes"]))
 
+    def test_the_planted_faults_are_stopped_by_their_own_limits_before_their_jobs(self):
+        """A run that hangs before its first fault is ended by the script, which says why, and not by GitHub, which does not."""
+        script = load(ROOT / "tools" / "planted_faults.py")
+        self.assertLess(script.GIT_SECONDS + script.SECONDS + script.SUITE_SECONDS, 60 * int(self.jobs["faults"]["timeout-minutes"]))
+
     def test_the_tests_run_on_every_python_the_pages_name(self):
         self.assertEqual(self.jobs["tests"]["strategy"], {"fail-fast": "false", "matrix": {"python-version": ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]}})
         versions = self.jobs["tests"]["strategy"]["matrix"]["python-version"]
@@ -534,6 +540,17 @@ class Floors(unittest.TestCase):
         page = CONTRIBUTING.read_text(encoding="utf-8")
         self.assertIn("\n" + here + "\n", page)
         self.assertIn("On GitHub that fails the job (`--no-skips`)", words_of(CONTRIBUTING))
+
+    def test_every_command_the_page_gives_for_the_planted_faults_is_one_the_script_takes(self):
+        script = load(ROOT / "tools" / "planted_faults.py")
+        commands = re.findall(r"^python3 tools/planted_faults\.py(.*)$", CONTRIBUTING.read_text(encoding="utf-8"), re.M)
+        self.assertEqual(commands, ["", " --check", " --only MF"])
+        for flag in re.findall(r"--[\w-]+", " ".join(commands)):
+            self.assertIn(f"[{flag}", script.USAGE)
+        labels = [fault[0] for path in sorted((ROOT / "tools" / "faults").glob("*.py")) for fault in runpy.run_path(str(path))["FAULTS"]]
+        self.assertTrue(any(label.startswith("MF") for label in labels))
+        self.assertEqual(script.SECONDS, 120)
+        self.assertIn("**CANNOT SAY.** The test did not finish within two minutes", words_of(CONTRIBUTING))
 
     def test_the_page_gives_the_package_jobs_own_commands_for_a_contributor_to_run(self):
         """A contributor's own check must fail where GitHub's would.
