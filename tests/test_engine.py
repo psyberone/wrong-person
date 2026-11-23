@@ -1,5 +1,7 @@
 """Run from the repository root:  PYTHONPATH=src python3 -m unittest discover -s tests -v"""
+import collections
 import dataclasses
+import itertools
 import json
 import os
 import random
@@ -219,9 +221,10 @@ class Semantics(unittest.TestCase):
                                           ("ends", ("A", "HELP")), ("is", ("Michael", "Carrie")))
                     for value in values
                     for positive in (True, False)}
-        self.assertEqual(len(expected), 96)       # 6 places x 4 matches x 2 values x 2 ways
+        expected -= {e.Rule("name", "is", "Michael"), e.Rule("name", "is", "Carrie")}   # never the killer outright
+        self.assertEqual(len(expected), 94)       # 6 places x 4 matches x 2 values x 2 ways, less those two
         self.assertEqual(set(rules), expected)
-        self.assertEqual(len(rules), 96)          # and nothing comes out twice
+        self.assertEqual(len(rules), 94)          # and nothing comes out twice
 
     def test_a_rule_is_for_or_against_and_nothing_else(self):
         for scope, match, value in (("page", "begins", "L"), ("line", "is", "Michael")):
@@ -245,6 +248,161 @@ class Semantics(unittest.TestCase):
     def test_an_unknown_match_is_refused_by_matches_too(self):
         with self.assertRaisesRegex(ValueError, "^unknown match 'rhymes'$"):
             e.matches("rhymes", "A", "AMBER")
+
+
+class TheRuleSpace(unittest.TestCase):
+    """What rule_space takes and what it turns away (issue #3)."""
+
+    def setUp(self):
+        self.b = e.Board(NAMES, SHAPE)
+
+    def test_the_space_is_a_tuple(self):
+        space = e.rule_space(self.b, ["A", "HELP"], ["Michael"])
+        self.assertIsInstance(space, tuple)
+        self.assertEqual(len(space), 72 + 11)     # 6 places x 3 matches x 2 sets x 2 ways, and 11 about Michael
+
+    def test_a_tuple_is_taken_as_a_list_is(self):
+        self.assertEqual(e.rule_space(self.b, ("A", "HELP"), ("Michael",)),
+                         e.rule_space(self.b, ["A", "HELP"], ["Michael"]))
+
+    def test_a_kind_of_list_or_of_tuple_is_taken_too(self):
+        class Shortlist(list):
+            pass
+        Pair = collections.namedtuple("Pair", "first second")
+        self.assertEqual(e.rule_space(self.b, Shortlist(["A", "HELP"]), Shortlist(["Michael"])),
+                         e.rule_space(self.b, ["A", "HELP"], ["Michael"]))
+        self.assertEqual(e.rule_space(self.b, Pair("A", "HELP"), Pair("Michael", "Ruth")),
+                         e.rule_space(self.b, ["A", "HELP"], ["Michael", "Ruth"]))
+
+    def test_nothing_given_is_an_empty_space(self):
+        self.assertEqual(e.rule_space(self.b, []), ())
+        self.assertEqual(e.rule_space(self.b, [], []), ())
+
+    def test_the_killer_is_never_named_outright(self):
+        space = e.rule_space(self.b, ["A"], ["Michael", "Carrie"])
+        self.assertEqual([r for r in space if r.scope == "name" and r.match == "is"],
+                         [e.Rule("name", "is", "Michael", False), e.Rule("name", "is", "Carrie", False)])
+
+    def test_a_named_person_must_be_on_the_board(self):
+        with self.assertRaises(ValueError) as refused:
+            e.rule_space(self.b, ["A"], ["Michael", "Zebedee"])
+        self.assertEqual(str(refused.exception), "'Zebedee' is named but is not on the board")
+
+    def test_part_of_a_name_on_the_board_is_not_on_it_and_nor_is_more_than_one(self):
+        # Maxwell, Michael, Ruth and Jack are on the board. "Max" begins one of them, "Well" ends
+        # it, "Ich" is in the middle of another, and "Ruthie" and "Jackson" each hold one whole.
+        for name in ("Max", "Well", "Ich", "Ruthie", "Jackson"):
+            with self.assertRaises(ValueError) as refused:
+                e.rule_space(self.b, [], [name])
+            self.assertEqual(str(refused.exception), f"{name!r} is named but is not on the board")
+
+    def test_a_named_person_is_found_whatever_the_case_and_kept_as_given(self):
+        space = e.rule_space(self.b, [], ["ruth", "MICHAEL"])
+        self.assertEqual([r.value for r in space if r.scope == "near" and r.positive], ["ruth", "MICHAEL"])
+
+    def test_a_named_person_is_found_however_the_board_writes_its_names(self):
+        in_capitals = e.Board([name.upper() for name in NAMES], SHAPE)
+        space = e.rule_space(in_capitals, [], ["Ruth", "michael"])
+        self.assertEqual([r.value for r in space if r.scope == "near" and r.positive], ["Ruth", "michael"])
+        with_a_capital_inside = e.Board(["McCoy" if name == "Ruth" else name for name in NAMES], SHAPE)
+        space = e.rule_space(with_a_capital_inside, [], ["Mccoy", "MCCOY"])
+        self.assertEqual([r.value for r in space if r.scope == "near" and r.positive], ["Mccoy", "MCCOY"])
+
+    def test_a_letter_set_is_kept_as_given(self):
+        self.assertEqual({r.value for r in e.rule_space(self.b, ["help", "A", "Clue"])}, {"help", "A", "Clue"})
+
+    def test_one_piece_of_text_is_not_a_list(self):
+        for given in ("HELP", "A", "", b"HELP"):
+            with self.assertRaises(ValueError) as refused:
+                e.rule_space(self.b, given)
+            self.assertEqual(str(refused.exception), f"letter sets must be a list or a tuple, got {given!r}")
+        for given in ("Ruth", "", b"Ruth"):
+            with self.assertRaises(ValueError) as refused:
+                e.rule_space(self.b, ["A"], given)
+            self.assertEqual(str(refused.exception), f"named people must be a list or a tuple, got {given!r}")
+
+    def test_only_a_list_or_a_tuple_is_taken(self):
+        def givens():
+            return (None, 5, {"A", "E"}, frozenset({"A"}), {"A": 1}, iter(["A"]), (x for x in ["A"]),
+                    range(3), collections.deque(["A"]), bytearray(b"HELP"), collections.UserList(["A"]))
+        for given in givens():
+            with self.assertRaises(ValueError) as refused:
+                e.rule_space(self.b, given)
+            self.assertEqual(str(refused.exception), f"letter sets must be a list or a tuple, got {given!r}")
+        for given in givens():
+            with self.assertRaises(ValueError) as refused:
+                e.rule_space(self.b, ["A"], given)
+            self.assertEqual(str(refused.exception), f"named people must be a list or a tuple, got {given!r}")
+
+    def test_what_is_wrong_is_refused_at_the_call(self):
+        for letter_sets, named, said in ((["A", "A1"], [], "value must be letters, got 'A1'"),
+                                         (["A", "LL"], [], "letter set repeats a letter: 'LL'"),
+                                         (["A", 5], [], "value must be letters, got 5"),
+                                         (["A"], ["Ruth", 5], "value must be letters, got 5"),
+                                         (["A"], ["Ruth", "R2"], "value must be letters, got 'R2'")):
+            with self.assertRaises(ValueError) as refused:
+                e.rule_space(self.b, letter_sets, named)      # not walked: the call itself refuses
+            self.assertEqual(str(refused.exception), said)
+
+    def test_the_first_thing_wrong_is_the_one_named(self):
+        for letter_sets, named, said in (("A", "Ruth", "letter sets must be a list or a tuple, got 'A'"),
+                                         (["A1"], "Ruth", "named people must be a list or a tuple, got 'Ruth'"),
+                                         (["A", "A1"], ["Zebedee"], "value must be letters, got 'A1'"),
+                                         (["A", "LL"], ["Zebedee"], "letter set repeats a letter: 'LL'"),
+                                         (["A"], ["Zebedee", "R2"], "'Zebedee' is named but is not on the board"),
+                                         (["A1", "LL"], [], "value must be letters, got 'A1'"),
+                                         (["LL", "A1"], [], "letter set repeats a letter: 'LL'"),
+                                         (["A"], ["R2", "Zebedee"], "value must be letters, got 'R2'"),
+                                         # a list cannot go in a set, so these two say nothing was made one
+                                         (["A", ["H", "E"]], [], "value must be letters, got ['H', 'E']"),
+                                         (["A"], ["Ruth", ["Jack"]], "value must be letters, got ['Jack']")):
+            with self.assertRaises(ValueError) as refused:
+                e.rule_space(self.b, letter_sets, named)
+            self.assertEqual(str(refused.exception), said)
+
+    def test_the_rules_come_in_one_order(self):
+        letter_sets, named = ["HELP", "A", "CLUE"], ["Michael", "Ruth", "Carrie"]      # in neither alphabetical order nor order of length, either way
+        space = e.rule_space(self.b, letter_sets, named)
+        self.assertEqual([scope for scope, _ in itertools.groupby(rule.scope for rule in space)],
+                         ["name", "line", "page", "chapter", "next_to", "near"])
+        on_a_line = [(r.match, r.value, r.positive) for r in space if r.scope == "line"]
+        self.assertEqual(on_a_line, [
+            ("contains", "HELP", True), ("contains", "HELP", False), ("contains", "A", True), ("contains", "A", False),
+            ("contains", "CLUE", True), ("contains", "CLUE", False),
+            ("begins", "HELP", True), ("begins", "HELP", False), ("begins", "A", True), ("begins", "A", False),
+            ("begins", "CLUE", True), ("begins", "CLUE", False),
+            ("ends", "HELP", True), ("ends", "HELP", False), ("ends", "A", True), ("ends", "A", False),
+            ("ends", "CLUE", True), ("ends", "CLUE", False),
+            ("is", "Michael", True), ("is", "Michael", False), ("is", "Ruth", True), ("is", "Ruth", False),
+            ("is", "Carrie", True), ("is", "Carrie", False)])
+        self.assertEqual((letter_sets, named), (["HELP", "A", "CLUE"], ["Michael", "Ruth", "Carrie"]))   # and are left so
+        for scope in ("page", "chapter", "next_to", "near"):
+            self.assertEqual([(r.match, r.value, r.positive) for r in space if r.scope == scope], on_a_line)
+        self.assertEqual([(r.match, r.value, r.positive) for r in space if r.scope == "name"],
+                         [rule for rule in on_a_line if rule[0] != "is" or not rule[2]])   # the same, less the killer's own
+
+    def test_each_list_is_copied_once_so_what_was_checked_is_what_is_used(self):
+        def shifty(kind, at_first, later):
+            """A list or a tuple that holds something else each time it is walked after the first."""
+            class Shifty(kind):
+                walks = 0
+
+                def __iter__(self):
+                    self.walks += 1
+                    return super().__iter__() if self.walks == 1 else iter(later)
+
+            return Shifty(at_first)
+
+        for kind in (list, tuple):
+            named = shifty(kind, ["Ruth"], ["Zebedee"])
+            self.assertEqual(e.rule_space(self.b, [], named), e.rule_space(self.b, [], ["Ruth"]))
+            letter_sets = shifty(kind, ["A"], ["HELP"])
+            self.assertEqual(e.rule_space(self.b, letter_sets, []), e.rule_space(self.b, ["A"], []))
+            self.assertEqual((named.walks, letter_sets.walks), (1, 1))
+
+    def test_what_is_given_twice_comes_out_twice(self):
+        self.assertEqual(len(e.rule_space(self.b, ["A", "A"])), 72)
+        self.assertEqual(len(e.rule_space(self.b, [], ["Ruth", "Ruth"])), 22)
 
 
 class Properties(unittest.TestCase):
@@ -607,8 +765,6 @@ class Wording(unittest.TestCase):
         board = e.Board(NAMES, SHAPE)
         seen = set()
         for rule in e.rule_space(board, ["A", "HELP"], ["Michael"]):
-            if rule == e.Rule("name", "is", "Michael"):
-                continue                          # refused: it would name the killer outright
             text = wording.sentence(rule, RIDDLE)
             self.assertTrue(text.endswith(".") and text[0].isupper())
             self.assertNotIn(text, seen)          # no two rules read the same, while only one

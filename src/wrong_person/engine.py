@@ -190,24 +190,57 @@ def decoys(rules, board, killer):
 
 
 def rule_space(board, letter_sets, named=()):
-    """The clue vocabulary: every place and match for each letter set, and an "is"
-    rule for each name in `named`, each of them both ways.
+    """The clue vocabulary, as a tuple: every place and match for each letter set,
+    and an "is" rule for each name in `named`, each of them both ways.
 
-    letter_sets  e.g. ["A", ..., "Z", "HELP", "CLUE"]
-    named        names that may be referred to directly (those with a riddle)
+    letter_sets  a list or a tuple, e.g. ["A", ..., "Z", "HELP", "CLUE"]
+    named        a list or a tuple of the names that may be referred to directly
+                 (those with a riddle); each must be on `board`, whatever the
+                 case of its letters
 
-    `board` is not read: the vocabulary is the same for every board, and a name
-    in `named` is not checked against it. The space includes Rule("name", "is",
-    X, True), which wording.sentence refuses to print.
+    One rule is left out: Rule("name", "is", X, True) would name the killer
+    outright, and wording.sentence refuses to print it whatever the riddle. It
+    refuses no rule that is here, given a riddle it accepts for each named person.
+
+    The rules come scope by scope, in the order of SCOPES: the letter rules
+    first (match by match, each letter set in the order given, for and then
+    against), then the named people in the order given.
+
+    `board` is read only to see that each named person is on it. Everything is
+    checked before the space is built, so what is wrong is refused at the call,
+    with a ValueError for the first thing wrong: letter sets, and then named
+    people, that are not a list or a tuple (one piece of text is neither); each
+    letter set in turn, if Rule refuses it; each name in turn, if Rule refuses
+    it or it is not on the board. What is given twice is not noticed: its rules
+    come out twice. A kind of list or of tuple (a named tuple, say) is taken as
+    one. Each letter set and each name is put in its rules written as given.
+
+    The caller's lists are never changed. Each is copied once, when it has been
+    seen to be a list or a tuple (a plain tuple needs no copy), and everything
+    after that works from the copy. So the rules are made from what was checked,
+    whatever becomes of the caller's list meanwhile.
     """
+    for what, given in (("letter sets", letter_sets), ("named people", named)):
+        if not isinstance(given, (list, tuple)):
+            raise ValueError(f"{what} must be a list or a tuple, got {given!r}")
+    letter_sets, named = tuple(letter_sets), tuple(named)      # copied once: what is checked is what is used
+    for value in letter_sets:
+        Rule("name", "contains", value)         # made only to be checked: Rule refuses what is no letter set
+    for name in named:
+        Rule("name", "is", name)                # likewise, for what is no name
+        if name.upper() not in board.upper:
+            raise ValueError(f"{name!r} is named but is not on the board")
+    space = []
     for scope in SCOPES:
         for match in ("contains", "begins", "ends"):
             for value in letter_sets:
                 for positive in (True, False):
-                    yield Rule(scope, match, value, positive)
+                    space.append(Rule(scope, match, value, positive))
         for name in named:
             for positive in (True, False):
-                yield Rule(scope, "is", name, positive)
+                if (scope, positive) != ("name", True):
+                    space.append(Rule(scope, "is", name, positive))
+    return tuple(space)
 
 
 # ---- cases as data ---------------------------------------------------------
