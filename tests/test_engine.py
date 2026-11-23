@@ -361,7 +361,7 @@ class TheRuleSpace(unittest.TestCase):
             self.assertEqual(str(refused.exception), said)
 
     def test_the_rules_come_in_one_order(self):
-        letter_sets, named = ["HELP", "A", "CLUE"], ["Michael", "Ruth", "Carrie"]      # orders that no sort gives
+        letter_sets, named = ["HELP", "A", "CLUE"], ["Michael", "Ruth", "Carrie"]      # in neither alphabetical order nor order of length, either way
         space = e.rule_space(self.b, letter_sets, named)
         self.assertEqual([scope for scope, _ in itertools.groupby(rule.scope for rule in space)],
                          ["name", "line", "page", "chapter", "next_to", "near"])
