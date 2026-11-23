@@ -689,7 +689,7 @@ class Refusals(SmallRepository):
                 self.assert_no_command_in(out + err)
 
     def test_a_test_may_take_two_minutes_and_the_suite_five(self):
-        """The contributing page says two minutes, and the job on GitHub has ten for everything."""
+        """The contributing page says two minutes, and the job on GitHub has thirty for everything."""
         self.assertEqual((self.script.SECONDS, self.script.SUITE_SECONDS, self.script.GIT_SECONDS), (120, 300, 60))
 
     def test_an_argument_it_does_not_know_is_refused(self):
