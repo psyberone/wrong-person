@@ -48,6 +48,13 @@ test two letter sets and two names (two things are always in one sorted order
 or its reverse) and tried the copy with a list only. E157 and E158 change the
 caller's own lists once they are copied: the tests caught them as they stood,
 and they stood in no list.
+
+E159 to E173 came with the change that holds the names in a riddle table to
+plain letters A to Z, with a capital first and not all capitals, and refuses a
+riddle holding a character that cannot go on a page (issue #5). They carry the
+tag `u7` for the work unit. The AI coding assistant planted them against its
+own change. E030 was written again for the same change: the words it replaces
+changed.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -153,7 +160,7 @@ FAULTS = [
      [(E, "len(set(self.value.upper()))", "len(set(self.value))")]),
     ("E030 [G4-C1] a table name need not start with a capital",
      "test_engine.Wording.test_a_name_in_the_table_starts_with_a_capital",
-     [(W, "name.isalpha() and name[0].isupper() and", "name.isalpha() and")]),
+     [(W, "and plain[0].isupper() and not plain.isupper()):", "and not plain.isupper()):")]),
     ("E031 [G4-C3] a table value need not be a list",
      "test_engine.Wording.test_a_name_needs_a_list_even_for_one_riddle",
      [(W, "if not isinstance(lines, list) or not lines:", "if not lines:")]),
@@ -593,4 +600,58 @@ FAULTS = [
      [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)      # copied once: what is checked is what is used\n",
           "    theirs, letter_sets, named = named, tuple(letter_sets), tuple(named)\n"
           "    if isinstance(theirs, list):\n        theirs.clear()\n")]),
+    # ---- what a riddle table may hold (issue #5)
+    ("E159 [u7] a name in all capitals passes",
+     "test_engine.Wording.test_a_name_in_all_capitals_is_refused",
+     [(W, "plain[0].isupper() and not plain.isupper()):", "plain[0].isupper()):")]),
+    ("E160 [u7] a name is checked with its accents still on",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "        plain = _plain(name)\n", "        plain = name\n")]),
+    ("E161 [u7] a name may be written in any letters, not only A to Z",
+     "test_engine.Wording.test_a_name_with_letters_that_have_no_plain_form_is_refused",
+     [(W, "if not (plain.isascii() and plain.isalpha()", "if not (plain.isalpha()")]),
+    ("E162 [u7] two names that are one in plain letters both pass",
+     "test_engine.Wording.test_two_names_that_are_one_in_plain_letters_are_refused", [
+        (W, "        if plain.lower() in plain_names:\n"
+            "            problems.append(f\"{name!r} and {plain_names[plain.lower()]!r} are one name in plain letters\")\n",
+            "")]),
+    ("E163 [u7] a riddle may hold a character that cannot go on a page",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused", [
+        (W, "            if hidden is not None:\n"
+            "                problems.append(f\"{name}: {line!r} holds U+{ord(hidden):04X}, \"\n"
+            "                                \"a character that cannot go on a page\")\n",
+            "")]),
+    ("E164 [u7] a riddle may hold a control character",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cf", "Cs", "Co", "Zl", "Zp"})')]),
+    ("E165 [u7] a riddle may hold a format character, such as a zero-width space",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cc", "Cs", "Co", "Zl", "Zp"})')]),
+    ("E166 [u7] a riddle may hold half of a surrogate pair",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cc", "Cf", "Co", "Zl", "Zp"})')]),
+    ("E167 [u7] a riddle may hold a private-use character",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})')]),
+    ("E168 [u7] a riddle may hold a line separator",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cc", "Cf", "Cs", "Co", "Zp"})')]),
+    ("E169 [u7] a riddle may hold a paragraph separator",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl"})')]),
+    ("E170 [u7] the refusal names the last such character, not the first",
+     "test_engine.Wording.test_only_the_first_such_character_is_named",
+     [(W, "for char in line if unicodedata", "for char in reversed(line) if unicodedata")]),
+    ("E171 [u7] riddles.json: the table's note no longer states the name rule",
+     "test_engine.Wording.test_the_riddle_table_states_the_name_rule_the_checker_holds",
+     [(J, "one word of at most 9 letters, A to Z with or without accents, starting with a capital and not all capitals.",
+          "one capitalised word, 9 letters or fewer.")]),
+    ("E172 [u7] a name's length is counted as written, accent marks included",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "and len(plain) <= 9", "and len(name) <= 9")]),
+    ("E173 [u7] two names that differ only in their capitals are two names",
+     "test_engine.Wording.test_two_names_that_are_one_in_plain_letters_are_refused", [
+        (W, "if plain.lower() in plain_names:", "if plain in plain_names:"),
+        (W, "plain_names[plain.lower()]!r}", "plain_names[plain]!r}"),
+        (W, "plain_names.setdefault(plain.lower(), name)", "plain_names.setdefault(plain, name)")]),
 ]

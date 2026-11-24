@@ -7,6 +7,7 @@ never the name. Change any sentence here and no logic moves.
 """
 import json
 import re
+import unicodedata
 from pathlib import Path
 
 PATTERN = {"contains": "containing", "begins": "beginning with", "ends": "ending in"}
@@ -22,6 +23,9 @@ PLACE = {"line": "on the killer's line", "page": "on the killer's page",
          "chapter": "in the killer's chapter"}
 BESIDE = {"next_to": "next to", "near": "near"}
 NOTE = "The police arrested the wrong person."      # the last clue of every case
+# Unicode's control, format, surrogate and private-use characters, and its line and
+# paragraph separators: none of them prints as a letter, a mark or a space.
+_UNPRINTED = frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})
 
 RULES_TEXT = ("Every clue is true of the killer. A list of letters means any one of them. "
               "A name contains a letter wherever it appears, its capital first letter included. "
@@ -54,6 +58,12 @@ def _gives_away(name, riddle):
     """Is the name one of the riddle's words? Case and punctuation do not hide it:
     "Tom's", "(Tom)" and "TOM," all hold Tom. "Kentucky" does not hold Ken."""
     return name.lower() in re.findall(r"[^\W\d_]+", riddle.lower())
+
+
+def _plain(name):
+    """The name with its accents taken off: 'Zoë' -> 'Zoe'. A letter written in
+    another form of itself, such as full width, comes back in its plain form."""
+    return "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
 
 
 def sentence(rule, riddle=None):
@@ -136,10 +146,16 @@ def check_riddles(table):
 
     Whether a riddle is easy, and whether it points to one person only, is on the author.
     """
-    problems, seen = [], {}
+    problems, seen, plain_names = [], {}, {}
     for name, lines in table.items():
-        if not (name.isalpha() and name[0].isupper() and len(name) <= 9):
-            problems.append(f"{name!r} must be one capitalised word of at most 9 letters")
+        plain = _plain(name)
+        if not (plain.isascii() and plain.isalpha() and len(plain) <= 9
+                and plain[0].isupper() and not plain.isupper()):
+            problems.append(f"{name!r} must be one word of at most 9 letters, A to Z with or "
+                            "without accents, starting with a capital and not all capitals")
+        if plain.lower() in plain_names:
+            problems.append(f"{name!r} and {plain_names[plain.lower()]!r} are one name in plain letters")
+        plain_names.setdefault(plain.lower(), name)
         if not isinstance(lines, list) or not lines:
             problems.append(f"{name} needs a list with at least one riddle")
             continue
@@ -155,6 +171,10 @@ def check_riddles(table):
             seen[key] = name
             if line != line.strip() or line.endswith("."):
                 problems.append(f"{name}: {line!r} should have no outer spaces or full stop")
+            hidden = next((char for char in line if unicodedata.category(char) in _UNPRINTED), None)
+            if hidden is not None:
+                problems.append(f"{name}: {line!r} holds U+{ord(hidden):04X}, "
+                                "a character that cannot go on a page")
             if _gives_away(name, line):
                 problems.append(f"{name}: {line!r} gives the name away")
     return problems

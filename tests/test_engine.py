@@ -617,6 +617,11 @@ class WholeCase(unittest.TestCase):
 
 
 class Wording(unittest.TestCase):
+    RULE = ("must be one word of at most 9 letters, A to Z with or without accents, "
+            "starting with a capital and not all capitals")
+    RIDDLE_OK = "the cat who chases Jerry"
+    PAGE = "a character that cannot go on a page"
+
     def test_sentences(self):
         say = wording.sentence
         self.assertEqual(say(CASE[0]), "There is no name beginning with L on the killer's page.")
@@ -794,11 +799,43 @@ class Wording(unittest.TestCase):
     def test_a_name_may_have_nine_letters_and_no_more(self):
         self.assertEqual(wording.check_riddles({"Elizabeth": ["the longest-reigning British queen"]}), [])
         self.assertEqual(wording.check_riddles({"Maximilian": ["the emperor of Mexico shot in 1867"]}),
-                         ["'Maximilian' must be one capitalised word of at most 9 letters"])
+                         [f"'Maximilian' {self.RULE}"])
 
     def test_a_name_in_the_table_starts_with_a_capital(self):
         self.assertEqual(wording.check_riddles({"tom": ["the cat who chases Jerry"]}),
-                         ["'tom' must be one capitalised word of at most 9 letters"])
+                         [f"'tom' {self.RULE}"])
+
+    def test_a_name_in_all_capitals_is_refused(self):
+        for name in ("JOHN", "A", "MCCOY"):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [f"{name!r} {self.RULE}"], name)
+
+    def test_a_name_with_a_capital_inside_passes(self):
+        for name in ("McCoy", "MacLeod", "LeBlanc", "DeShawn"):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [], name)
+
+    def test_a_name_is_counted_in_its_plain_letters(self):
+        # the accent written as its own mark makes ten characters, and still nine letters
+        for name in ("Zoë", "Renée", "Élisabeth", "Élisabeth", "Ｊｏｈｎ"):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [], name)
+        ten = "Élisabeths"
+        self.assertEqual(wording.check_riddles({ten: [self.RIDDLE_OK]}), [f"{ten!r} {self.RULE}"])
+
+    def test_a_name_with_letters_that_have_no_plain_form_is_refused(self):
+        for name in ("Σοφία", "Søren", "Straße"):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [f"{name!r} {self.RULE}"], name)
+
+    def test_two_names_that_are_one_in_plain_letters_are_refused(self):
+        self.assertEqual(wording.check_riddles({"Zoe": ["the first riddle"], "Zoë": ["the second riddle"]}),
+                         ["'Zoë' and 'Zoe' are one name in plain letters"])
+        self.assertEqual(wording.check_riddles({"McCoy": ["the first riddle"], "Mccoy": ["the second riddle"]}),
+                         ["'Mccoy' and 'McCoy' are one name in plain letters"])
+        self.assertEqual(wording.check_riddles({"Zoe": ["the first riddle"], "Zak": ["the second riddle"]}), [])
+
+    def test_the_riddle_table_states_the_name_rule_the_checker_holds(self):
+        path = Path(wording.__file__).with_name("riddles.json")
+        notes = " ".join(json.loads(path.read_text(encoding="utf-8"))["_rules"])
+        rule = wording.check_riddles({"tom": ["x"]})[0].split(" must be ", 1)[1]
+        self.assertIn(rule, notes)
 
     def test_a_name_needs_a_list_even_for_one_riddle(self):
         self.assertEqual(wording.check_riddles({"Tom": "the cat who chases Jerry"}),
@@ -852,6 +889,29 @@ class Wording(unittest.TestCase):
             self.assertEqual(len(problems), 1, line)
             self.assertIn("outer spaces or full stop", problems[0])
 
+    def test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused(self):
+        # a control (six of them), a format (three), a surrogate, a private use, a line and a paragraph separator
+        for code in (0x09, 0x0A, 0x0D, 0x00, 0x7F, 0x85, 0x200B, 0x00AD, 0x202E, 0xD800, 0xE000, 0x2028, 0x2029):
+            line = "the cat who" + chr(code) + "chases Jerry"
+            self.assertEqual(wording.check_riddles({"Tom": [line]}),
+                             [f"Tom: {line!r} holds U+{code:04X}, {self.PAGE}"], hex(code))
+
+    def test_only_the_first_such_character_is_named(self):
+        line = "the cat\twho\nchases Jerry"
+        self.assertEqual(wording.check_riddles({"Tom": [line]}), [f"Tom: {line!r} holds U+0009, {self.PAGE}"])
+
+    def test_a_hidden_character_cannot_hide_the_name(self):
+        line = "the cat called To​m"                # reads as Tom; the give-away check sees To and m
+        self.assertEqual(wording.check_riddles({"Tom": [line]}), [f"Tom: {line!r} holds U+200B, {self.PAGE}"])
+
+    def test_a_riddle_of_nothing_but_a_hidden_character_is_refused(self):
+        self.assertEqual(wording.check_riddles({"Tom": ["​"]}), [f"Tom: '\\u200b' holds U+200B, {self.PAGE}"])
+
+    def test_markup_ampersands_and_spaces_are_left_to_the_page(self):
+        lines = ["the duo Simon & Garfunkel", "the singer in <b>bold</b>", "the singer of Rock &amp; Roll",
+                 "the cat who chases Jerry"]
+        self.assertEqual(wording.check_riddles({"Sue": lines}), [])
+
     def test_a_riddle_file_of_ones_own_is_read(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "mine.json")
@@ -864,6 +924,15 @@ class Wording(unittest.TestCase):
             path = Path(folder, "mine.json")
             path.write_bytes(json.dumps(table, ensure_ascii=False).encode("utf-8"))
             self.assertEqual(wording.load_riddles(path), table)
+
+    def test_a_riddle_file_with_a_line_break_in_a_riddle_is_refused(self):
+        line = "the cat who\nchases Jerry"
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            path.write_text('{"Tom": ["the cat who\\nchases Jerry"]}', encoding="utf-8")
+            with self.assertRaises(ValueError) as refused:
+                wording.load_riddles(path)
+            self.assertEqual(str(refused.exception), f"mine.json: Tom: {line!r} holds U+000A, {self.PAGE}")
 
     def test_a_name_listed_twice_in_a_file_is_refused(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -887,7 +956,7 @@ class Wording(unittest.TestCase):
                 "mine.json: Jill is listed twice; Jack is listed twice",
             # and another fault in the file does not hide it
             '{"Jack": ["the lad with the beanstalk"], "Jack": ["the giant killer"], "jill": ["the girl on the hill"]}':
-                "mine.json: Jack is listed twice; 'jill' must be one capitalised word of at most 9 letters",
+                f"mine.json: Jack is listed twice; 'jill' {self.RULE}",
         }
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "mine.json")
