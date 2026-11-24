@@ -467,7 +467,7 @@ FAULTS = [
      [(PF, "SECONDS = 120  ", "SECONDS = 1200 ")]),
     ("N136 the whole suite may take longer than the job on GitHub is given",
      "test_workflow.Workflow.test_the_planted_faults_are_stopped_by_their_own_limits_before_their_jobs",
-     [(PF, "SUITE_SECONDS = 300  ", "SUITE_SECONDS = 1800 ")]),
+     [(PF, "SUITE_SECONDS = 300  ", "SUITE_SECONDS = 3600 ")]),
     ("N137 git may take ten minutes to list the files",
      TESTS + "Refusals.test_a_test_may_take_two_minutes_and_the_suite_five",
      [(PF, "GIT_SECONDS = 60  ", "GIT_SECONDS = 600 ")]),

@@ -689,7 +689,7 @@ class Refusals(SmallRepository):
                 self.assert_no_command_in(out + err)
 
     def test_a_test_may_take_two_minutes_and_the_suite_five(self):
-        """The contributing page says two minutes, and the job on GitHub has ten for everything."""
+        """The contributing page says two minutes, and the job on GitHub has thirty for everything."""
         self.assertEqual((self.script.SECONDS, self.script.SUITE_SECONDS, self.script.GIT_SECONDS), (120, 300, 60))
 
     def test_an_argument_it_does_not_know_is_refused(self):
@@ -987,7 +987,7 @@ class TheLists(unittest.TestCase):
     def test_each_list_holds_as_many_faults_as_it_did(self):
         """To add a fault, or to retire one, change its list's number here in the same pull request."""
         held = {path.name: len(runpy.run_path(str(path))["FAULTS"]) for path in sorted((ROOT / "tools" / "faults").glob("*.py"))}
-        self.assertEqual(held, {"checks.py": 297, "package.py": 158, "runner.py": 149})
+        self.assertEqual(held, {"checks.py": 298, "package.py": 158, "runner.py": 149})
 
 
 class RunAsAProgram(SmallRepository):

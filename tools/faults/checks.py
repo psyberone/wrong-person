@@ -8,8 +8,9 @@ CONTRIBUTING.md says how to add one.
 
 Most were planted by hand during the three reviews of the repository checks,
 by the AI reviewers and by the AI coding assistant that wrote the fixes. J01 to
-J15 are later: the coding assistant wrote J01 to J14 with the job that plants
-these faults, and J15 after that job's review. A tag in square brackets says
+J16 are later: the coding assistant wrote J01 to J14 with the job that plants
+these faults, J15 after that job's review, and J16 when the job was given
+thirty minutes instead of ten (#29). A tag in square brackets says
 where a fault came from: G1 to G5 are the reviewers of the five gates, each
 with that reviewer's own name for the fault, and M with a number is the review
 finding whose fix the fault was planted against. For L01 to L18 the tag is the
@@ -50,7 +51,7 @@ ABOVE_EACH_CHECKOUT = [
     "    name: package\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    steps:\n      - uses: ",
     "    name: mutation\n    runs-on: ubuntu-24.04\n    timeout-minutes: 20\n    steps:\n      - uses: ",
     "    name: private-words\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n    steps:\n      - uses: ",
-    "    name: faults\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    steps:\n      - uses: ",
+    "    name: faults\n    runs-on: ubuntu-24.04\n    timeout-minutes: 30\n    steps:\n      - uses: ",
 ]
 
 # Lines of tools/private_words.py that the faults of the third review change.
@@ -917,11 +918,11 @@ FAULTS = [
        "      - name: Plant each fault in a copy of the repository and see that its test fails\n")]),
     ("J09 the faults job has no time limit",
      "test_workflow.Workflow.test_every_job_has_a_time_limit_and_the_scans_own_limit_on_git_is_well_inside_its_jobs",
-     [(WF, "    name: faults\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n", "    name: faults\n    runs-on: ubuntu-24.04\n")]),
+     [(WF, "    name: faults\n    runs-on: ubuntu-24.04\n    timeout-minutes: 30\n", "    name: faults\n    runs-on: ubuntu-24.04\n")]),
     ("J10 the faults job's checkout keeps the token",
      "test_workflow.Workflow.test_every_checkout_drops_the_token_it_was_given",
-     [(WF, "    timeout-minutes: 10\n    steps:\n      - uses: " + CHECKOUT + "\n        with:\n          persist-credentials: false\n      - name: Plant",
-       "    timeout-minutes: 10\n    steps:\n      - uses: " + CHECKOUT + "\n      - name: Plant")]),
+     [(WF, "    timeout-minutes: 30\n    steps:\n      - uses: " + CHECKOUT + "\n        with:\n          persist-credentials: false\n      - name: Plant",
+       "    timeout-minutes: 30\n    steps:\n      - uses: " + CHECKOUT + "\n      - name: Plant")]),
     ("J11 the faults job runs only when asked",
      "test_workflow.Workflow.test_no_job_or_step_runs_only_sometimes_but_all_checks_runs_always",
      [(WF, "    name: faults\n", "    name: faults\n    if: github.event_name == 'push'\n")]),
@@ -937,6 +938,9 @@ FAULTS = [
     ("J15 the page gives a flag that the script does not have",
      "test_workflow.Floors.test_every_command_the_page_gives_for_the_planted_faults_is_one_the_script_takes",
      [(CO, "python3 tools/planted_faults.py --check\n", "python3 tools/planted_faults.py --fits\n")]),
+    ("J16 the faults job is given ten minutes again",
+     "test_workflow.Workflow.test_every_job_has_a_time_limit_and_the_scans_own_limit_on_git_is_well_inside_its_jobs",
+     [(WF, "    name: faults\n    runs-on: ubuntu-24.04\n    timeout-minutes: 30\n", "    name: faults\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n")]),
     # ---- the third review of the repository checks
     ("L01 [H7] what follows the last hash in a message is not read",
      "test_private_words.Scan.test_a_word_after_the_last_hash_in_a_message_is_found",
