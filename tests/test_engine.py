@@ -850,9 +850,10 @@ class Wording(unittest.TestCase):
 
     def test_a_name_is_counted_in_its_plain_letters(self):
         # the accent written as its own mark makes ten characters, and still nine letters;
-        # a mark comes off whether it is drawn over a letter, under it (a cedilla) or through it
+        # a mark comes off whether it is drawn over a letter, under it (a cedilla, a comma),
+        # through it (a stroke) or at its upper right (the horn, as in Vietnamese)
         for name in ("Zo\u00eb", "Ren\u00e9e", "\u00c9lisabeth", "E\u0301lisabeth",
-                     "Fran\u00e7ois", "\u015etefan", "Ma\u0335x"):
+                     "Fran\u00e7ois", "\u015etefan", "\u0218tefan", "D\u01b0\u01a1ng", "Ma\u0335x"):
             self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [], name)
         ten = "\u00c9lisabeths"
         self.assertEqual(wording.check_riddles({ten: [self.RIDDLE_OK]}), [f"{ten!r} {self.RULE}"])
@@ -1018,7 +1019,7 @@ class Wording(unittest.TestCase):
         self.assertEqual(wording.check_riddles({"Tom": ["the cat in the caf\u00e9", "the cat by the cafe\u0301"]}), [])
 
     def test_a_riddle_may_hold_a_character_unicode_has_not_assigned(self):
-        self.assertEqual(unicodedata.category("\u0378"), "Cn")     # refusing these is left out on purpose
+        self.assertEqual(unicodedata.category("\u0378"), "Cn")     # unassigned, and not one Unicode draws as nothing
         self.assertEqual(wording.check_riddles({"Tom": ["the cat who\u0378chases Jerry"]}), [])
 
     def test_a_zero_width_space_cannot_hide_the_name(self):

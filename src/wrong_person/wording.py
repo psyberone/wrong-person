@@ -79,9 +79,12 @@ def _gives_away(name, riddle):
 
 
 def _plain(text):
-    """The text with its accents taken off: Zo\u00eb comes back as Zoe. Every mark Unicode
-    joins to a letter comes off, whether drawn over, under, through or beside it. A letter
-    in another form, such as full width or circled, stays as it is; only a sign Unicode
+    """The text with its accents taken off: Zo\u00eb comes back as Zoe. A mark comes off
+    when Unicode 3.2 gives it a combining class, as it does the acute accent, a cedilla
+    or a comma under a letter, a stroke through it, and the horn of Vietnamese. A mark
+    it gives none stays on, so a name holding one is refused: the grapheme joiner, an
+    enclosing circle, many vowel signs, and any mark newer than Unicode 3.2. A letter in
+    another form, such as full width or circled, stays as it is; only a sign Unicode
     holds to be that very letter, such as the Kelvin sign for K, is read as the letter.
     Unicode 3.2's tables are used, which every Python holds alike, so the answer is the
     same on each."""

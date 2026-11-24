@@ -70,6 +70,10 @@ Each is a fault the AI reviewers planted that no test caught: a riddle looked
 at with its ends trimmed, in sentence() and arrest(), in the look itself or in
 the table check; only marks over a letter come off, or a mark through a letter
 stays on; the six kinds are looked for before what Unicode draws as nothing.
+
+E194 and E195 came from the second re-check, and carry the tag `u7r3`. Each
+takes off only some kinds of mark: E194 leaves the horn on, and E195 a mark
+below a letter as well.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -746,4 +750,11 @@ FAULTS = [
      "test_engine.Wording.test_only_the_first_such_character_is_named",
      [(W, " in _UNPRINTED\n                 or any(low <= ord(char) <= high for low, high in _IGNORABLE)), None)",
           " in _UNPRINTED), None) or next(\n                 (char for char in text if any(low <= ord(char) <= high for low, high in _IGNORABLE)), None)")]),
+    # ---- from the second re-check
+    ("E194 [u7r3] only marks over, under or through a letter come off: the horn stays on",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", "if unicodedata.ucd_3_2_0.combining(char) not in (1, 202, 220, 230))")]),
+    ("E195 [u7r3] a mark below a letter stays on, such as a comma, and the horn too",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", "if unicodedata.ucd_3_2_0.combining(char) not in (1, 202, 230))")]),
 ]
