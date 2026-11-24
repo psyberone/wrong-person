@@ -23,9 +23,15 @@ PLACE = {"line": "on the killer's line", "page": "on the killer's page",
          "chapter": "in the killer's chapter"}
 BESIDE = {"next_to": "next to", "near": "near"}
 NOTE = "The police arrested the wrong person."      # the last clue of every case
-# Unicode's control, format, surrogate and private-use characters, and its line and
-# paragraph separators: none of them prints as a letter, a mark or a space.
+# What a riddle may not hold. Unicode's control, format, surrogate and private-use
+# characters, and its line and paragraph separators: none of them belongs in a riddle,
+# and most cannot be seen.
 _UNPRINTED = frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})
+# And the rest of what Unicode says to draw as nothing (its "default ignorable" code points,
+# DerivedCoreProperties.txt 16.0.0) that is not a format character: a grapheme joiner,
+# Hangul fillers, variation selectors, tags, and code points kept for more of them.
+_IGNORABLE = ((0x034F, 0x034F), (0x115F, 0x1160), (0x17B4, 0x17B5), (0x180B, 0x180F), (0x2065, 0x2065),
+              (0x3164, 0x3164), (0xFE00, 0xFE0F), (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8), (0xE0000, 0xE0FFF))
 
 RULES_TEXT = ("Every clue is true of the killer. A list of letters means any one of them. "
               "A name contains a letter wherever it appears, its capital first letter included. "
@@ -45,33 +51,48 @@ def _cap(text):
     return text[0].upper() + text[1:]
 
 
+def _unprinted(text):
+    """The first character in the text that cannot go on a page, or None."""
+    return next((char for char in text if unicodedata.category(char) in _UNPRINTED
+                 or any(low <= ord(char) <= high for low, high in _IGNORABLE)), None)
+
+
 def _riddle(riddle):
-    """The riddle, if it is one: some text. Nothing, blank text or anything else is refused."""
+    """The riddle, if it is one: some text that can go on a page. Nothing, blank text,
+    text holding a character that cannot go on a page, and anything else are refused."""
     if riddle is not None and not isinstance(riddle, str):
         raise ValueError(f"a riddle is one piece of text, got {riddle!r}")
     if not riddle or not riddle.strip():
         raise ValueError("a named person is only ever printed as a riddle, and none was given")
+    hidden = _unprinted(riddle)
+    if hidden is not None:
+        raise ValueError(f"the riddle {riddle!r} holds U+{ord(hidden):04X}, a character that cannot go on a page")
     return riddle
 
 
 def _gives_away(name, riddle):
-    """Is the name one of the riddle's words? Case and punctuation do not hide it:
-    "Tom's", "(Tom)" and "TOM," all hold Tom. "Kentucky" does not hold Ken."""
-    return name.lower() in re.findall(r"[^\W\d_]+", riddle.lower())
+    """Is the name one of the riddle's words, both in plain letters? Case, punctuation
+    and accents do not hide it: "Tom's", "(Tom)" and "TOM," all hold Tom, and "Zoe
+    Kravitz" holds Zo\u00eb. "Kentucky" does not hold Ken."""
+    return _plain(name).lower() in re.findall(r"[^\W\d_]+", _plain(riddle).lower())
 
 
-def _plain(name):
-    """The name with its accents taken off: 'Zoë' -> 'Zoe'. A letter written in
-    another form of itself, such as full width, comes back in its plain form."""
-    return "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
+def _plain(text):
+    """The text with its accents taken off: Zo\u00eb comes back as Zoe. Only marks drawn
+    over, under or through a letter come off. A letter in another form, such as full
+    width, circled or a sign, stays as it is. Unicode 3.2's tables are used, which every
+    Python holds alike, so the answer is the same on each."""
+    return "".join(char for char in unicodedata.ucd_3_2_0.normalize("NFD", text)
+                   if not unicodedata.ucd_3_2_0.combining(char))
 
 
 def sentence(rule, riddle=None):
     """One printed clue.
 
     An "is" rule is about a named person, so it needs that person's `riddle`. A
-    missing or blank riddle, one that is not text, and one that holds the
-    person's name are all refused with a ValueError, so the name is not printed.
+    missing or blank riddle, one that is not text, one that holds a character
+    that cannot go on a page, and one that holds the person's name are all
+    refused with a ValueError, so the name is not printed.
 
     Rule("name", "is", X, False) is the last clue of a case. It prints as NOTE,
     names nobody and ignores the riddle. Every such rule prints the same
@@ -103,8 +124,9 @@ def sentence(rule, riddle=None):
 def arrest(riddle):
     """The premise's arrest: "Police have arrested <riddle>."
 
-    A missing or blank riddle, or one that is not text, is refused with a
-    ValueError. arrest() is not told the person's name, so it cannot tell a
+    A missing or blank riddle, one that is not text, and one that holds a
+    character that cannot go on a page are refused with a ValueError.
+    arrest() is not told the person's name, so it cannot tell a
     riddle that holds it: take riddles from a table that check_riddles passed.
     """
     return f"Police have arrested {_riddle(riddle)}."
@@ -151,8 +173,10 @@ def check_riddles(table):
         plain = _plain(name)
         if not (plain.isascii() and plain.isalpha() and len(plain) <= 9
                 and plain[0].isupper() and not plain.isupper()):
+            odd = next((char for char in plain if not (char.isascii() and char.isalpha())), None)
             problems.append(f"{name!r} must be one word of at most 9 letters, A to Z with or "
-                            "without accents, starting with a capital and not all capitals")
+                            "without accents, starting with a capital and not all capitals"
+                            + ("" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z"))
         if plain.lower() in plain_names:
             problems.append(f"{name!r} and {plain_names[plain.lower()]!r} are one name in plain letters")
         plain_names.setdefault(plain.lower(), name)
@@ -171,7 +195,7 @@ def check_riddles(table):
             seen[key] = name
             if line != line.strip() or line.endswith("."):
                 problems.append(f"{name}: {line!r} should have no outer spaces or full stop")
-            hidden = next((char for char in line if unicodedata.category(char) in _UNPRINTED), None)
+            hidden = _unprinted(line)
             if hidden is not None:
                 problems.append(f"{name}: {line!r} holds U+{ord(hidden):04X}, "
                                 "a character that cannot go on a page")

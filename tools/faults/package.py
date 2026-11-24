@@ -55,6 +55,15 @@ riddle holding a character that cannot go on a page (issue #5). They carry the
 tag `u7` for the work unit. The AI coding assistant planted them against its
 own change. E030 was written again for the same change: the words it replaces
 changed.
+
+E174 to E187 came from the review of that change, and carry the tag `u7r`.
+E183 to E186 are faults the AI reviewers planted that no test caught. The rest
+are the AI coding assistant's, for what the review changed: accents come off
+with Unicode 3.2's tables and only as marks, the give-away check reads both
+name and riddle in plain letters, a riddle may not hold what Unicode draws as
+nothing, sentence() and arrest() refuse what a table refuses, and a name's
+refusal says which character is not a letter A to Z. E038, E039, E040, E084
+and E170 were written again: the words they replace changed.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -186,13 +195,16 @@ FAULTS = [
     # ---- wording and the riddle file
     ("E038 [G4-C4] the name check is case-sensitive",
      "test_engine.Wording.test_a_riddle_gives_the_name_away_in_any_case", [
-        (W, 'return name.lower() in re.findall(r"[^\\W\\d_]+", riddle.lower())', 'return name in re.findall(r"[^\\W\\d_]+", riddle)')]),
+        (W, 'return _plain(name).lower() in re.findall(r"[^\\W\\d_]+", _plain(riddle).lower())',
+            'return _plain(name) in re.findall(r"[^\\W\\d_]+", _plain(riddle))')]),
     ("E039 [G1-F2] the name check splits on spaces and the straight apostrophe only",
      "test_engine.Wording.test_a_riddle_gives_the_name_away_whatever_touches_it", [
-        (W, 'return name.lower() in re.findall(r"[^\\W\\d_]+", riddle.lower())', 'return name.lower() in riddle.lower().replace("\'", " ").split()')]),
+        (W, 'return _plain(name).lower() in re.findall(r"[^\\W\\d_]+", _plain(riddle).lower())',
+            'return _plain(name).lower() in _plain(riddle).lower().replace("\'", " ").split()')]),
     ("E040 [own] the name check looks inside longer words",
      "test_engine.Wording.test_a_name_inside_a_longer_word_gives_nothing_away", [
-        (W, 'return name.lower() in re.findall(r"[^\\W\\d_]+", riddle.lower())', 'return name.lower() in riddle.lower()')]),
+        (W, 'return _plain(name).lower() in re.findall(r"[^\\W\\d_]+", _plain(riddle).lower())',
+            'return _plain(name).lower() in _plain(riddle).lower()')]),
     ("E041 [G2-F7] sentence prints a riddle that holds the name",
      "test_engine.Wording.test_a_riddle_that_holds_the_name_is_refused", [
         (W, '        if _gives_away(rule.value, who):\n            raise ValueError(f"the riddle {who!r} gives the name away")\n', '')]),
@@ -305,7 +317,7 @@ FAULTS = [
      "test_engine.Wording.test_a_riddle_that_holds_the_name_is_refused", [
         (W, "        if _gives_away(rule.value, who):", "        if yes and _gives_away(rule.value, who):")]),
     ("E074 [G2w-N1b] the name check knows only a to z",
-     "test_engine.Wording.test_a_name_with_an_accent_is_guarded_like_any_other",
+     "test_engine.Wording.test_a_name_inside_a_longer_word_gives_nothing_away",
      [(W, 'r"[^\\W\\d_]+"', 'r"[a-z]+"')]),
     ("E075 [G2w-N1c] positive is not checked on an 'is' rule",
      "test_engine.Semantics.test_a_rule_is_for_or_against_and_nothing_else", [
@@ -340,8 +352,8 @@ FAULTS = [
             "            return NOTE\n")]),
     ("E084 [G4w-K27] a word's final s is not counted",
      "test_engine.Wording.test_a_name_inside_a_longer_word_gives_nothing_away", [
-        (W, 'return name.lower() in re.findall(r"[^\\W\\d_]+", riddle.lower())',
-            'return name.lower() in [word.rstrip("s") for word in re.findall(r"[^\\W\\d_]+", riddle.lower())]')]),
+        (W, 'return _plain(name).lower() in re.findall(r"[^\\W\\d_]+", _plain(riddle).lower())',
+            'return _plain(name).lower() in [word.rstrip("s") for word in re.findall(r"[^\\W\\d_]+", _plain(riddle).lower())]')]),
     ("E085 [G4w-K30] a name is checked for truth, not for text",
      "test_engine.Geometry.test_a_name_that_is_not_text_is_refused", [
         (E, "isinstance(name, str) and name.isalpha() for name in names", "name and name.isalpha() for name in names")]),
@@ -641,7 +653,7 @@ FAULTS = [
      [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl"})')]),
     ("E170 [u7] the refusal names the last such character, not the first",
      "test_engine.Wording.test_only_the_first_such_character_is_named",
-     [(W, "for char in line if unicodedata", "for char in reversed(line) if unicodedata")]),
+     [(W, "for char in text if unicodedata", "for char in reversed(text) if unicodedata")]),
     ("E171 [u7] riddles.json: the table's note no longer states the name rule",
      "test_engine.Wording.test_the_riddle_table_states_the_name_rule_the_checker_holds",
      [(J, "one word of at most 9 letters, A to Z with or without accents, starting with a capital and not all capitals.",
@@ -654,4 +666,58 @@ FAULTS = [
         (W, "if plain.lower() in plain_names:", "if plain in plain_names:"),
         (W, "plain_names[plain.lower()]!r}", "plain_names[plain]!r}"),
         (W, "plain_names.setdefault(plain.lower(), name)", "plain_names.setdefault(plain, name)")]),
+    # ---- from the review of that change
+    ("E174 [u7r] accents are taken off with this Python's tables, not Unicode 3.2's",
+     "test_engine.Wording.test_accents_come_off_by_tables_every_python_holds_alike",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", "if not unicodedata.combining(char))")]),
+    ("E175 [u7r] a name in another form of letters, such as full width, passes as plain letters",
+     "test_engine.Wording.test_a_name_in_other_forms_of_letters_is_refused",
+     [(W, 'unicodedata.ucd_3_2_0.normalize("NFD", text)', 'unicodedata.ucd_3_2_0.normalize("NFKD", text)')]),
+    ("E176 [u7r] the give-away check reads the name with its accents on",
+     "test_engine.Wording.test_the_name_is_found_in_its_riddle_in_plain_letters",
+     [(W, "return _plain(name).lower() in", "return name.lower() in")]),
+    ("E177 [u7r] the give-away check reads the riddle with its accents on",
+     "test_engine.Wording.test_the_name_is_found_in_its_riddle_in_plain_letters",
+     [(W, ", _plain(riddle).lower())", ", riddle.lower())")]),
+    ("E178 [u7r] a riddle may hold what Unicode draws as nothing, if it is not a format character",
+     "test_engine.Wording.test_every_character_unicode_draws_as_nothing_is_refused_in_a_riddle",
+     [(W, " in _UNPRINTED\n                 or any(low <= ord(char) <= high for low, high in _IGNORABLE)), None)",
+          " in _UNPRINTED), None)")]),
+    ("E179 [u7r] sentence() and arrest() print a riddle holding a character that cannot go on a page",
+     "test_engine.Wording.test_a_riddle_that_cannot_go_on_a_page_is_refused_wherever_it_is_printed", [
+        (W, "    hidden = _unprinted(riddle)\n    if hidden is not None:\n"
+            "        raise ValueError(f\"the riddle {riddle!r} holds U+{ord(hidden):04X}, a character that cannot go on a page\")\n",
+            "")]),
+    ("E180 [u7r] the refusal of a name does not say which character is not a letter A to Z",
+     "test_engine.Wording.test_the_refusal_names_the_first_character_that_is_not_a_letter_a_to_z",
+     [(W, '\n                            + ("" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z"))', ")")]),
+    ("E181 [u7r] the refusal of a name names its last character that is not a letter A to Z",
+     "test_engine.Wording.test_a_name_with_letters_that_have_no_plain_form_is_refused",
+     [(W, "for char in plain if not (char.isascii()", "for char in reversed(plain) if not (char.isascii()")]),
+    ("E182 [u7r] the refusal of a name looks for that character with the accents still on",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "for char in plain if not (char.isascii()", "for char in name if not (char.isascii()")]),
+    ("E183 [u7r] a name that breaks the rule is not checked against the names before it",
+     "test_engine.Wording.test_a_name_that_breaks_the_rule_is_still_checked_against_the_others",
+     [(W, "        if plain.lower() in plain_names:", "        elif plain.lower() in plain_names:")]),
+    ("E184 [u7r] a name without a list of riddles is not remembered as a name",
+     "test_engine.Wording.test_a_name_without_a_list_of_riddles_still_counts_as_a_name", [
+        (W, "        plain_names.setdefault(plain.lower(), name)\n"
+            "        if not isinstance(lines, list) or not lines:\n"
+            "            problems.append(f\"{name} needs a list with at least one riddle\")\n"
+            "            continue\n",
+            "        if not isinstance(lines, list) or not lines:\n"
+            "            problems.append(f\"{name} needs a list with at least one riddle\")\n"
+            "            continue\n"
+            "        plain_names.setdefault(plain.lower(), name)\n")]),
+    ("E185 [u7r] the refusal of a riddle names the lowest such character, not the first",
+     "test_engine.Wording.test_only_the_first_such_character_is_named", [
+        (W, "return next((char for char in text if", "return min((char for char in text if"),
+        (W, "_IGNORABLE)), None)", "_IGNORABLE)), default=None)")]),
+    ("E186 [u7r] accents are taken off by dropping every mark, a grapheme joiner and a variation selector too",
+     "test_engine.Wording.test_a_name_with_a_hidden_character_is_refused",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", 'if unicodedata.ucd_3_2_0.category(char) != "Mn")')]),
+    ("E187 [u7r] a riddle may hold a tag character",
+     "test_engine.Wording.test_every_character_unicode_draws_as_nothing_is_refused_in_a_riddle",
+     [(W, ", (0xE0000, 0xE0FFF))", ")")]),
 ]
