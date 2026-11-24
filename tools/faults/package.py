@@ -64,6 +64,12 @@ name and riddle in plain letters, a riddle may not hold what Unicode draws as
 nothing, sentence() and arrest() refuse what a table refuses, and a name's
 refusal says which character is not a letter A to Z. E038, E039, E040, E084
 and E170 were written again: the words they replace changed.
+
+E188 to E193 came from the re-check of that change, and carry the tag `u7r2`.
+Each is a fault the AI reviewers planted that no test caught: a riddle looked
+at with its ends trimmed, in sentence() and arrest(), in the look itself or in
+the table check; only marks over a letter come off, or a mark through a letter
+stays on; the six kinds are looked for before what Unicode draws as nothing.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -717,7 +723,27 @@ FAULTS = [
     ("E186 [u7r] accents are taken off by dropping every mark, a grapheme joiner and a variation selector too",
      "test_engine.Wording.test_a_name_with_a_hidden_character_is_refused",
      [(W, "if not unicodedata.ucd_3_2_0.combining(char))", 'if unicodedata.ucd_3_2_0.category(char) != "Mn")')]),
-    ("E187 [u7r] a riddle may hold a tag character",
+    ("E187 [u7r] a riddle may hold a variation selector from U+E0100 on, or a code point kept for more of them",
      "test_engine.Wording.test_every_character_unicode_draws_as_nothing_is_refused_in_a_riddle",
      [(W, ", (0xE0000, 0xE0FFF))", ")")]),
+    # ---- from the re-check of that change
+    ("E188 [u7r2] sentence() and arrest() look for a hidden character in the riddle with its ends trimmed",
+     "test_engine.Wording.test_a_riddle_that_cannot_go_on_a_page_is_refused_wherever_it_is_printed",
+     [(W, "hidden = _unprinted(riddle)", "hidden = _unprinted(riddle.strip())")]),
+    ("E189 [u7r2] the look for a hidden character trims the text first",
+     "test_engine.Wording.test_a_riddle_that_cannot_go_on_a_page_is_refused_wherever_it_is_printed",
+     [(W, "for char in text if unicodedata", "for char in text.strip() if unicodedata")]),
+    ("E190 [u7r2] the table check looks for a hidden character in the riddle with its ends trimmed",
+     "test_engine.Wording.test_a_hidden_character_at_either_end_of_a_riddle_is_named_too",
+     [(W, "hidden = _unprinted(line)", "hidden = _unprinted(line.strip())")]),
+    ("E191 [u7r2] only marks drawn over a letter come off, not under or through it",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", "if unicodedata.ucd_3_2_0.combining(char) != 230)")]),
+    ("E192 [u7r2] a mark drawn through a letter stays on",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", "if unicodedata.ucd_3_2_0.combining(char) in (0, 1))")]),
+    ("E193 [u7r2] the refusal of a riddle names the first of the six kinds before what Unicode draws as nothing",
+     "test_engine.Wording.test_only_the_first_such_character_is_named",
+     [(W, " in _UNPRINTED\n                 or any(low <= ord(char) <= high for low, high in _IGNORABLE)), None)",
+          " in _UNPRINTED), None) or next(\n                 (char for char in text if any(low <= ord(char) <= high for low, high in _IGNORABLE)), None)")]),
 ]

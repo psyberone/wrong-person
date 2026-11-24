@@ -28,8 +28,9 @@ NOTE = "The police arrested the wrong person."      # the last clue of every cas
 # and most cannot be seen.
 _UNPRINTED = frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})
 # And the rest of what Unicode says to draw as nothing (its "default ignorable" code points,
-# DerivedCoreProperties.txt 16.0.0) that is not a format character: a grapheme joiner,
-# Hangul fillers, variation selectors, tags, and code points kept for more of them.
+# DerivedCoreProperties.txt 16.0.0), leaving out the runs that are format characters
+# throughout: a grapheme joiner, Hangul fillers, variation selectors, tags, and code points
+# kept for more of them. A format character inside these ranges is refused on both counts.
 _IGNORABLE = ((0x034F, 0x034F), (0x115F, 0x1160), (0x17B4, 0x17B5), (0x180B, 0x180F), (0x2065, 0x2065),
               (0x3164, 0x3164), (0xFE00, 0xFE0F), (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8), (0xE0000, 0xE0FFF))
 
@@ -78,10 +79,12 @@ def _gives_away(name, riddle):
 
 
 def _plain(text):
-    """The text with its accents taken off: Zo\u00eb comes back as Zoe. Only marks drawn
-    over, under or through a letter come off. A letter in another form, such as full
-    width, circled or a sign, stays as it is. Unicode 3.2's tables are used, which every
-    Python holds alike, so the answer is the same on each."""
+    """The text with its accents taken off: Zo\u00eb comes back as Zoe. Every mark Unicode
+    joins to a letter comes off, whether drawn over, under, through or beside it. A letter
+    in another form, such as full width or circled, stays as it is; only a sign Unicode
+    holds to be that very letter, such as the Kelvin sign for K, is read as the letter.
+    Unicode 3.2's tables are used, which every Python holds alike, so the answer is the
+    same on each."""
     return "".join(char for char in unicodedata.ucd_3_2_0.normalize("NFD", text)
                    if not unicodedata.ucd_3_2_0.combining(char))
 
