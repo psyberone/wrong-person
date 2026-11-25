@@ -862,6 +862,25 @@ class Wording(unittest.TestCase):
                           (" \u0301Tom", " ")):
             self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], ascii(name))
 
+    def test_only_a_mark_that_comes_off_whole_gets_the_ending(self):
+        # the owner chose that only a name starting with one of the 330 marks that come off whole gets the ending:
+        # those Unicode 3.2 gives a combining class, and three Tibetan vowel signs made of such marks alone. Every
+        # code point is tried first, before Tom and before an accent and Tom, so that no other character gets it and
+        # nothing written first is looked past. The sweep gives each name no riddle, which keeps it to seconds
+        comes_off = {point for point in range(0x110000) if unicodedata.ucd_3_2_0.combining(chr(point))}
+        comes_off |= {0x0F73, 0x0F75, 0x0F81}
+        self.assertEqual(len(comes_off), 330)
+        for point in sorted(comes_off):
+            for name in (chr(point) + "Tom", chr(point) + "\u0301Tom"):
+                self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}),
+                                 [self.refusal_for_a_mark(name, f"{point:04X}")], ascii(name))
+
+        def get_the_ending(rest):
+            return {point for point in range(0x110000)
+                    if any("before any letter" in problem for problem in wording.check_riddles({chr(point) + rest: []}))}
+        self.assertEqual(get_the_ending("Tom"), comes_off)
+        self.assertEqual(get_the_ending("\u0301Tom"), comes_off)
+
     def test_a_name_in_all_capitals_is_refused(self):
         for name in ("JOHN", "A", "MCCOY"):
             self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [f"{name!r} {self.RULE}"], name)

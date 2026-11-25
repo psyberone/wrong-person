@@ -109,6 +109,15 @@ hidden character taken for one; the code read once accents are joined or
 letters are split; white space looked past; and the ending given as well to a
 mark that has this Python's class. The owner chose to keep the behaviour and
 test its edges, so each is killed by a case added with them.
+
+E220 to E227 came from the eighth re-check, and carry the tag `u7r9`. They are
+eight more changes to where the new ending starts and stops that the AI
+reviewers found passing every test: the mark found by Unicode 3.2's category,
+alone or beside its class; a mark that comes off taken only when its category,
+Unicode 3.2's or this Python's, is Mn; a mark taken when making it plain
+changes it; a character Unicode says to draw as nothing taken for a mark; and a
+byte order mark looked past. The owner chose one test that tries every
+character first in a name, so each is killed by that test.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -859,10 +868,10 @@ FAULTS = [
      [(W, 'if name and not _plain(name[0]):', 'if name and (not _plain(name[0]) or _unprinted(name[0]) is not None):')]),
     ("E215 [u7r8] the code of a leading mark is read once accents are joined, and is not the one written",
      "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
-     [(W, 'U+{ord(name[0]):04X}, before any letter', 'U+{ord(unicodedata.normalize("NFC", name)[0]):04X}, before any letter')]),
+     [(W, 'U+{ord(name[0]):04X}, before any letter', "U+{ord(unicodedata.normalize('NFC', name)[0]):04X}, before any letter")]),
     ("E216 [u7r8] the code of a leading mark is read once letters are split, and is not the one written",
      "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
-     [(W, 'U+{ord(name[0]):04X}, before any letter', 'U+{ord(unicodedata.normalize("NFD", name)[0]):04X}, before any letter')]),
+     [(W, 'U+{ord(name[0]):04X}, before any letter', "U+{ord(unicodedata.normalize('NFD', name)[0]):04X}, before any letter")]),
     ("E217 [u7r8] a leading mark is looked for past white space, and the space gets the ending",
      "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
      [(W, 'if name and not _plain(name[0]):', 'if name.strip() and not _plain(name.strip()[0]):')]),
@@ -873,4 +882,29 @@ FAULTS = [
     ("E219 [u7r8] a leading mark with this Python's class gets the ending too, so it hangs on the Python",
      "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
      [(W, 'if name and not _plain(name[0]):', 'if name and (not _plain(name[0]) or unicodedata.combining(name[0])):')]),
+    # ---- from the eighth re-check
+    ("E220 [u7r9] a leading mark gets the ending by Unicode 3.2's category Mn, so marks that stay on get it, and eight that come off do not",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.ucd_3_2_0.category(name[0]) == "Mn":')]),
+    ("E221 [u7r9] only a leading mark that comes off and has this Python's category Mn gets the ending, so eleven name nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and unicodedata.category(name[0]) == "Mn":')]),
+    ("E222 [u7r9] a leading mark that changes when made plain gets the ending, so marks that split but stay on get it",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.category(name[0]).startswith("M") and _plain(name[0]) != name[0]:')]),
+    ("E223 [u7r9] a leading mark gets the ending by Unicode 3.2's category Mn or Mc, so marks that stay on get it",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.ucd_3_2_0.category(name[0]) in ("Mn", "Mc"):')]),
+    ("E224 [u7r9] a leading mark gets the ending by its Unicode 3.2 class or its category Mn, so marks that stay on get it",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and (unicodedata.ucd_3_2_0.combining(name[0]) or unicodedata.ucd_3_2_0.category(name[0]) == "Mn"):')]),
+    ("E225 [u7r9] only a leading mark that comes off and has Unicode 3.2's category Mn gets the ending, so eight name nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and unicodedata.ucd_3_2_0.category(name[0]) == "Mn":')]),
+    ("E226 [u7r9] a character first that Unicode says to draw as nothing gets the ending, as if it were a mark",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and (not _plain(name[0]) or any(low <= ord(name[0]) <= high for low, high in _IGNORABLE)):')]),
+    ("E227 [u7r9] a byte order mark first is looked past, and is called a mark when one follows it",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name.lstrip("\\ufeff") and not _plain(name.lstrip("\\ufeff")[0]):')]),
 ]
