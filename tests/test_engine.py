@@ -847,13 +847,20 @@ class Wording(unittest.TestCase):
 
     def test_a_name_that_starts_with_an_accent_is_refused(self):
         # "starting with a capital" is read as written, so an accent before the first letter breaks it;
-        # the accent draws on the quote before the name, so the refusal says what it is, by its code
-        for name, code in (("\u0301Tom", "0301"), ("\u0308Zo\u00eb", "0308")):
+        # the accent draws on the quote before the name, so the refusal says what it is, by its code. U+0F73
+        # has no class of its own but comes off whole; U+0341 is given by its own code, not by U+0301's
+        for name, code in (("\u0301Tom", "0301"), ("\u0308Zo\u00eb", "0308"), ("\u0f73Tom", "0F73"),
+                           ("\u0341Tom", "0341")):
             self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal_for_a_mark(name, code)],
                              ascii(name))
         # the accent comes first, so it is named before a later letter that has no plain form
         name = "\u0301S\u00f8ren"
         self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal_for_a_mark(name, "0301")])
+        # only a mark that comes off whole gets that ending: a hidden character, an enclosing circle, a mark newer
+        # than Unicode 3.2, and a space before an accent are named first as any other character is
+        for name, odd in (("\u200bTom", "\u200b"), ("\u20ddTom", "\u20dd"), ("\u1dc4Tom", "\u1dc4"),
+                          (" \u0301Tom", " ")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], ascii(name))
 
     def test_a_name_in_all_capitals_is_refused(self):
         for name in ("JOHN", "A", "MCCOY"):

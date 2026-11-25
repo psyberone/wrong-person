@@ -100,6 +100,15 @@ from a name, before checking it or before naming a character; E206 and E208
 are faults the AI reviewers planted that no test caught. E180 was written
 again: the words it replaces changed. E200's label now says that only a space
 or line break at a name's end passes, since the capital is read as written.
+
+E210 to E219 came from the seventh re-check, and carry the tag `u7r8`. They are
+the ten changes to the new ending that the AI reviewers and the AI coding
+assistant found passing every test: its code in lower case; the mark found by
+its combining class, Unicode 3.2's or this Python's, or by its category, or a
+hidden character taken for one; the code read once accents are joined or
+letters are split; white space looked past; and the ending given as well to a
+mark that has this Python's class. The owner chose to keep the behaviour and
+test its edges, so each is killed by a case added with them.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -832,4 +841,36 @@ FAULTS = [
     ("E209 [u7r7] the refusal of a name looks past tabs at its ends, and names nothing",
      "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
      [(W, "for char in name\n", 'for char in name.strip("\\t")\n')]),
+    # ---- from the seventh re-check
+    ("E210 [u7r8] the code of a leading mark is written in lower case",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'U+{ord(name[0]):04X}, before any letter', 'U+{ord(name[0]):04x}, before any letter')]),
+    ("E211 [u7r8] a leading mark gets the ending by its Unicode 3.2 class, so three Tibetan signs name nothing",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.ucd_3_2_0.combining(name[0]):')]),
+    ("E212 [u7r8] a leading mark gets the ending by this Python's class, so it hangs on the Python",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.combining(name[0]):')]),
+    ("E213 [u7r8] every leading mark gets the ending, even one that stays on",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.category(name[0]).startswith("M"):')]),
+    ("E214 [u7r8] a hidden character first gets the ending, as if it were a mark",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name and (not _plain(name[0]) or _unprinted(name[0]) is not None):')]),
+    ("E215 [u7r8] the code of a leading mark is read once accents are joined, and is not the one written",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'U+{ord(name[0]):04X}, before any letter', 'U+{ord(unicodedata.normalize("NFC", name)[0]):04X}, before any letter')]),
+    ("E216 [u7r8] the code of a leading mark is read once letters are split, and is not the one written",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'U+{ord(name[0]):04X}, before any letter', 'U+{ord(unicodedata.normalize("NFD", name)[0]):04X}, before any letter')]),
+    ("E217 [u7r8] a leading mark is looked for past white space, and the space gets the ending",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name.strip() and not _plain(name.strip()[0]):')]),
+    ("E218 [u7r8] a leading mark is looked for past white space, and named instead of the space",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name.strip() and not _plain(name.strip()[0]):'),
+      (W, 'U+{ord(name[0]):04X}, before any letter', 'U+{ord(name.strip()[0]):04X}, before any letter')]),
+    ("E219 [u7r8] a leading mark with this Python's class gets the ending too, so it hangs on the Python",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name and (not _plain(name[0]) or unicodedata.combining(name[0])):')]),
 ]
