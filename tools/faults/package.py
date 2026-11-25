@@ -82,6 +82,14 @@ assistant's, for what the re-check changed: a name's refusal names the
 character as written, not what is left of it once the accents come off. E198
 names what is left, as before, and E199 names an accent written apart from
 its letter. E181 and E182 were written again: the line they change changed.
+
+E200 to E203 came from the fifth re-check, and carry the tag `u7r6`. E200 to
+E202 are faults the AI reviewers planted that no test caught: a name is looked
+at with its ends trimmed, or its refusal looks past them, or joins each accent
+to its letter before naming a character. E203 is the AI coding assistant's,
+for what the re-check changed: "starting with a capital" is read from the name
+as written, so a name may not start with an accent. E030 and E159 were written
+again: the words they replace changed.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -187,7 +195,7 @@ FAULTS = [
      [(E, "len(set(self.value.upper()))", "len(set(self.value))")]),
     ("E030 [G4-C1] a table name need not start with a capital",
      "test_engine.Wording.test_a_name_in_the_table_starts_with_a_capital",
-     [(W, "and plain[0].isupper() and not plain.isupper()):", "and not plain.isupper()):")]),
+     [(W, "and name[0].isupper() and not plain.isupper()):", "and not plain.isupper()):")]),
     ("E031 [G4-C3] a table value need not be a list",
      "test_engine.Wording.test_a_name_needs_a_list_even_for_one_riddle",
      [(W, "if not isinstance(lines, list) or not lines:", "if not lines:")]),
@@ -633,7 +641,7 @@ FAULTS = [
     # ---- what a riddle table may hold (issue #5)
     ("E159 [u7] a name in all capitals passes",
      "test_engine.Wording.test_a_name_in_all_capitals_is_refused",
-     [(W, "plain[0].isupper() and not plain.isupper()):", "plain[0].isupper()):")]),
+     [(W, "name[0].isupper() and not plain.isupper()):", "name[0].isupper()):")]),
     ("E160 [u7] a name is checked with its accents still on",
      "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
      [(W, "        plain = _plain(name)\n", "        plain = name\n")]),
@@ -782,4 +790,17 @@ FAULTS = [
      "test_engine.Wording.test_the_refusal_of_a_name_names_the_character_as_written",
      [(W, "if not all(part.isascii() and part.isalpha() for part in _plain(char))), None)",
        "if not (_plain(char).isascii() and _plain(char).isalpha())), None)")]),
+    # ---- from the fifth re-check
+    ("E200 [u7r6] a name is looked at with its ends trimmed, so a space or line break at either end passes",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "        plain = _plain(name)\n", "        plain = _plain(name.strip())\n")]),
+    ("E201 [u7r6] the refusal of a name looks past a space or line break at either end, and names nothing",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "for char in name\n", "for char in name.strip()\n")]),
+    ("E202 [u7r6] the refusal of a name joins each accent to its letter first, and names what was not written",
+     "test_engine.Wording.test_the_refusal_of_a_name_names_the_character_as_written",
+     [(W, "for char in name\n", 'for char in unicodedata.normalize("NFC", name)\n')]),
+    ("E203 [u7r6] the capital is read from the plain form, so an accent before the first letter passes",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, "and name[0].isupper() and not plain.isupper()", "and plain[0].isupper() and not plain.isupper()")]),
 ]

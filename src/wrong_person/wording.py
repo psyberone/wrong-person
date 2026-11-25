@@ -179,7 +179,7 @@ def check_riddles(table):
     for name, lines in table.items():
         plain = _plain(name)
         if not (plain.isascii() and plain.isalpha() and len(plain) <= 9
-                and plain[0].isupper() and not plain.isupper()):
+                and name[0].isupper() and not plain.isupper()):
             odd = next((char for char in name
                         if not all(part.isascii() and part.isalpha() for part in _plain(char))), None)
             problems.append(f"{name!r} must be one word of at most 9 letters, A to Z with or "
