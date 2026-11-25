@@ -90,6 +90,16 @@ to its letter before naming a character. E203 is the AI coding assistant's,
 for what the re-check changed: "starting with a capital" is read from the name
 as written, so a name may not start with an accent. E030 and E159 were written
 again: the words they replace changed.
+
+E204 to E209 came from the sixth re-check, and carry the tag `u7r7`. E204 and
+E205 are the AI coding assistant's, for what the re-check changed: the refusal
+of a name that starts with a mark gives the mark's code, since the mark draws
+on the quote before the name. E204 leaves that out, as before, and E205 names
+a later character first. E206 to E209 trim only line breaks, or only tabs,
+from a name, before checking it or before naming a character; E206 and E208
+are faults the AI reviewers planted that no test caught. E180 was written
+again: the words it replaces changed. E200's label now says that only a space
+or line break at a name's end passes, since the capital is read as written.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -716,7 +726,7 @@ FAULTS = [
             "")]),
     ("E180 [u7r] the refusal of a name does not say which character is not a letter A to Z",
      "test_engine.Wording.test_the_refusal_names_the_first_character_that_is_not_a_letter_a_to_z",
-     [(W, '\n                            + ("" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z"))', ")")]),
+     [(W, 'why = "" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z"', 'why = ""')]),
     ("E181 [u7r] the refusal of a name names its last character that is not a letter A to Z",
      "test_engine.Wording.test_a_name_with_letters_that_have_no_plain_form_is_refused",
      [(W, "for char in name\n", "for char in reversed(name)\n")]),
@@ -791,7 +801,7 @@ FAULTS = [
      [(W, "if not all(part.isascii() and part.isalpha() for part in _plain(char))), None)",
        "if not (_plain(char).isascii() and _plain(char).isalpha())), None)")]),
     # ---- from the fifth re-check
-    ("E200 [u7r6] a name is looked at with its ends trimmed, so a space or line break at either end passes",
+    ("E200 [u7r6] a name is looked at with its ends trimmed, so a space or line break at its end passes",
      "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
      [(W, "        plain = _plain(name)\n", "        plain = _plain(name.strip())\n")]),
     ("E201 [u7r6] the refusal of a name looks past a space or line break at either end, and names nothing",
@@ -803,4 +813,23 @@ FAULTS = [
     ("E203 [u7r6] the capital is read from the plain form, so an accent before the first letter passes",
      "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
      [(W, "and name[0].isupper() and not plain.isupper()", "and plain[0].isupper() and not plain.isupper()")]),
+    # ---- from the sixth re-check
+    ("E204 [u7r7] the refusal of a name that starts with a mark does not give the mark's code",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, "if name and not _plain(name[0]):", "if False:")]),
+    ("E205 [u7r7] the refusal of a name that starts with a mark names a later character first",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, "if name and not _plain(name[0]):", "if odd is None and name and not _plain(name[0]):")]),
+    ("E206 [u7r7] a name is looked at with line breaks trimmed from its ends, so one at its end passes",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "        plain = _plain(name)\n", '        plain = _plain(name.strip("\\n"))\n')]),
+    ("E207 [u7r7] a name is looked at with tabs trimmed from its ends, so one at its end passes",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "        plain = _plain(name)\n", '        plain = _plain(name.strip("\\t"))\n')]),
+    ("E208 [u7r7] the refusal of a name looks past line breaks at its ends, and names nothing",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "for char in name\n", 'for char in name.strip("\\n")\n')]),
+    ("E209 [u7r7] the refusal of a name looks past tabs at its ends, and names nothing",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "for char in name\n", 'for char in name.strip("\\t")\n')]),
 ]

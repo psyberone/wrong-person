@@ -633,6 +633,10 @@ class Wording(unittest.TestCase):
         that is not a letter A to Z with or without accents."""
         return f"{name!r} {self.RULE}" + ("" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z")
 
+    def refusal_for_a_mark(self, name, code):
+        """How a name whose first character is a mark that comes off whole is refused: by the mark's code."""
+        return f"{name!r} {self.RULE}: it starts with an accent or other mark, U+{code}, before any letter"
+
     def test_sentences(self):
         say = wording.sentence
         self.assertEqual(say(CASE[0]), "There is no name beginning with L on the killer's page.")
@@ -842,9 +846,14 @@ class Wording(unittest.TestCase):
                          [f"'tom' {self.RULE}"])
 
     def test_a_name_that_starts_with_an_accent_is_refused(self):
-        # "starting with a capital" is read as written, so an accent before the first letter breaks it
-        for name in ("\u0301Tom", "\u0308Zo\u00eb"):
-            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name)], ascii(name))
+        # "starting with a capital" is read as written, so an accent before the first letter breaks it;
+        # the accent draws on the quote before the name, so the refusal says what it is, by its code
+        for name, code in (("\u0301Tom", "0301"), ("\u0308Zo\u00eb", "0308")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal_for_a_mark(name, code)],
+                             ascii(name))
+        # the accent comes first, so it is named before a later letter that has no plain form
+        name = "\u0301S\u00f8ren"
+        self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal_for_a_mark(name, "0301")])
 
     def test_a_name_in_all_capitals_is_refused(self):
         for name in ("JOHN", "A", "MCCOY"):
@@ -895,7 +904,7 @@ class Wording(unittest.TestCase):
 
     def test_a_name_with_a_digit_a_sign_or_a_space_is_refused(self):
         for name, odd in (("Jo3", "3"), ("Jo_e", "_"), ("Mary-Kate", "-"), ("Jo Ann", " "), ("O'Neil", "'"),
-                          ("Tom ", " "), (" Tom", " ")):
+                          ("Tom ", " "), (" Tom", " "), ("Tom\n", "\n"), ("Tom\t", "\t")):
             self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], name)
 
     def test_a_name_with_a_hidden_character_is_refused(self):
@@ -922,8 +931,10 @@ class Wording(unittest.TestCase):
             self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], ascii(name))
 
     def test_a_name_of_nothing_or_of_marks_alone_is_refused(self):
-        for name in ("", "\u0301", "\u0301\u0308"):
-            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name)], repr(name))
+        self.assertEqual(wording.check_riddles({"": [self.RIDDLE_OK]}), [self.refusal("")])
+        for name in ("\u0301", "\u0301\u0308"):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal_for_a_mark(name, "0301")],
+                             ascii(name))
 
     def test_a_name_that_breaks_the_rule_is_still_checked_against_the_others(self):
         self.assertEqual(wording.check_riddles({"Zoe": ["the first riddle"], "ZO\u00cb": ["the second riddle"]}),

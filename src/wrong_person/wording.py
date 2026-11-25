@@ -182,9 +182,11 @@ def check_riddles(table):
                 and name[0].isupper() and not plain.isupper()):
             odd = next((char for char in name
                         if not all(part.isascii() and part.isalpha() for part in _plain(char))), None)
+            why = "" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z"
+            if name and not _plain(name[0]):    # a mark first draws on the quote before the name: give its code
+                why = f": it starts with an accent or other mark, U+{ord(name[0]):04X}, before any letter"
             problems.append(f"{name!r} must be one word of at most 9 letters, A to Z with or "
-                            "without accents, starting with a capital and not all capitals"
-                            + ("" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z"))
+                            "without accents, starting with a capital and not all capitals" + why)
         if plain.lower() in plain_names:
             problems.append(f"{name!r} and {plain_names[plain.lower()]!r} are one name in plain letters")
         plain_names.setdefault(plain.lower(), name)
