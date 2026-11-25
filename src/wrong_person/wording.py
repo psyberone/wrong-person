@@ -83,12 +83,12 @@ def _plain(text):
     when Unicode 3.2 gives it a combining class, as it does the acute accent, a cedilla
     or a comma under a letter, a stroke through it, and the horn of Vietnamese. Three
     Tibetan vowel signs have no class and come off too, since Unicode splits each into
-    two marks that have one. Any other mark with no class stays on, so a name holding
-    one is refused: the grapheme joiner, an enclosing circle, many vowel signs, and any
-    mark newer than Unicode 3.2. A letter in another form, such as full width or
-    circled, stays as it is; only a sign Unicode holds to be that very letter, such as
-    the Kelvin sign for K, is read as the letter. Unicode 3.2's tables are used, which
-    every Python holds alike, so the answer is the same on each."""
+    two marks that have one. Any other mark with no class stays on, in whole or in part,
+    so a name holding one is refused: the grapheme joiner, an enclosing circle, many
+    vowel signs, and any mark newer than Unicode 3.2. A letter in another form, such as
+    full width or circled, stays as it is; only a sign Unicode holds to be that very
+    letter, such as the Kelvin sign for K, is read as the letter. Unicode 3.2's tables
+    are used, which every Python holds alike, so the answer is the same on each."""
     return "".join(char for char in unicodedata.ucd_3_2_0.normalize("NFD", text)
                    if not unicodedata.ucd_3_2_0.combining(char))
 
@@ -180,7 +180,8 @@ def check_riddles(table):
         plain = _plain(name)
         if not (plain.isascii() and plain.isalpha() and len(plain) <= 9
                 and plain[0].isupper() and not plain.isupper()):
-            odd = next((char for char in plain if not (char.isascii() and char.isalpha())), None)
+            odd = next((char for char in name
+                        if not all(part.isascii() and part.isalpha() for part in _plain(char))), None)
             problems.append(f"{name!r} must be one word of at most 9 letters, A to Z with or "
                             "without accents, starting with a capital and not all capitals"
                             + ("" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z"))

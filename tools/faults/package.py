@@ -74,6 +74,14 @@ stays on; the six kinds are looked for before what Unicode draws as nothing.
 E194 and E195 came from the second re-check, and carry the tag `u7r3`. Each
 takes off only some kinds of mark: E194 leaves the horn on, and E195 a mark
 below a letter as well.
+
+E196 to E199 came from the fourth re-check, and carry the tag `u7r5`. E196 and
+E197 are faults the AI reviewers planted that no test caught: an enclosing
+mark comes off, or a spacing mark. E198 and E199 are the AI coding
+assistant's, for what the re-check changed: a name's refusal names the
+character as written, not what is left of it once the accents come off. E198
+names what is left, as before, and E199 names an accent written apart from
+its letter. E181 and E182 were written again: the line they change changed.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -703,10 +711,10 @@ FAULTS = [
      [(W, '\n                            + ("" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z"))', ")")]),
     ("E181 [u7r] the refusal of a name names its last character that is not a letter A to Z",
      "test_engine.Wording.test_a_name_with_letters_that_have_no_plain_form_is_refused",
-     [(W, "for char in plain if not (char.isascii()", "for char in reversed(plain) if not (char.isascii()")]),
+     [(W, "for char in name\n", "for char in reversed(name)\n")]),
     ("E182 [u7r] the refusal of a name looks for that character with the accents still on",
      "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
-     [(W, "for char in plain if not (char.isascii()", "for char in name if not (char.isascii()")]),
+     [(W, "for part in _plain(char))), None)", "for part in char)), None)")]),
     ("E183 [u7r] a name that breaks the rule is not checked against the names before it",
      "test_engine.Wording.test_a_name_that_breaks_the_rule_is_still_checked_against_the_others",
      [(W, "        if plain.lower() in plain_names:", "        elif plain.lower() in plain_names:")]),
@@ -757,4 +765,21 @@ FAULTS = [
     ("E195 [u7r3] a mark below a letter stays on, such as a comma, and the horn too",
      "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
      [(W, "if not unicodedata.ucd_3_2_0.combining(char))", "if unicodedata.ucd_3_2_0.combining(char) not in (1, 202, 230))")]),
+    # ---- from the fourth re-check
+    ("E196 [u7r5] an enclosing mark comes off, such as a circle drawn round a letter",
+     "test_engine.Wording.test_a_name_with_an_enclosing_or_spacing_mark_is_refused",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))",
+       "if not unicodedata.ucd_3_2_0.combining(char) and unicodedata.ucd_3_2_0.category(char) != 'Me')")]),
+    ("E197 [u7r5] a spacing mark comes off, such as a vowel sign beside its letter",
+     "test_engine.Wording.test_a_name_with_an_enclosing_or_spacing_mark_is_refused",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))",
+       "if not unicodedata.ucd_3_2_0.combining(char) and unicodedata.ucd_3_2_0.category(char) != 'Mc')")]),
+    ("E198 [u7r5] the refusal of a name names what is left once the accents come off, not what was written",
+     "test_engine.Wording.test_the_refusal_of_a_name_names_the_character_as_written",
+     [(W, "for char in name\n                        if not all(part.isascii() and part.isalpha() for part in _plain(char))), None)",
+       "for char in plain if not (char.isascii() and char.isalpha())), None)")]),
+    ("E199 [u7r5] the refusal of a name names an accent written apart from its letter",
+     "test_engine.Wording.test_the_refusal_of_a_name_names_the_character_as_written",
+     [(W, "if not all(part.isascii() and part.isalpha() for part in _plain(char))), None)",
+       "if not (_plain(char).isascii() and _plain(char).isalpha())), None)")]),
 ]

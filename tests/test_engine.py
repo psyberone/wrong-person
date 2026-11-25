@@ -629,7 +629,8 @@ class Wording(unittest.TestCase):
                  (0x1D173, 0x1D17A), (0xE0000, 0xE0FFF))
 
     def refusal(self, name, odd=None):
-        """How a name that breaks the rule is refused; `odd` is its first character that is not a letter A to Z."""
+        """How a name that breaks the rule is refused; `odd` is the first character, as written in it,
+        that is not a letter A to Z with or without accents."""
         return f"{name!r} {self.RULE}" + ("" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z")
 
     def test_sentences(self):
@@ -862,6 +863,14 @@ class Wording(unittest.TestCase):
         for name, odd in (("\u03a3\u03bf\u03c6\u03af\u03b1", "\u03a3"), ("S\u00f8ren", "\u00f8"), ("Stra\u00dfe", "\u00df")):
             self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], name)
 
+    def test_the_refusal_of_a_name_names_the_character_as_written(self):
+        # Unicode splits each of these in two, and the refusal names what was written, not a part of it
+        for name, odd in (("\u0386nna", "\u0386"), ("\u0419van", "\u0419"), ("\uac00ra", "\uac00")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], ascii(name))
+        # an accent written apart from its letter is not named when the name breaks the rule another way
+        ten = "E\u0301lisabeths"
+        self.assertEqual(wording.check_riddles({ten: [self.RIDDLE_OK]}), [self.refusal(ten)])
+
     def test_two_names_that_are_one_in_plain_letters_are_refused(self):
         self.assertEqual(wording.check_riddles({"Zoe": ["the first riddle"], "Zo\u00eb": ["the second riddle"]}),
                          ["'Zo\u00eb' and 'Zoe' are one name in plain letters"])
@@ -897,6 +906,12 @@ class Wording(unittest.TestCase):
         # U+1DC4 is a mark Unicode added after 3.2, whose tables every Python holds: it stays on, everywhere
         name = "To\u1dc4m"
         self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, "\u1dc4")])
+
+    def test_a_name_with_an_enclosing_or_spacing_mark_is_refused(self):
+        # an enclosing circle, and a vowel sign that takes up room beside its letter (as in Hindi):
+        # neither has a combining class, so neither comes off
+        for name, odd in (("To\u20ddm", "\u20dd"), ("To\u093em", "\u093e")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], ascii(name))
 
     def test_a_name_of_nothing_or_of_marks_alone_is_refused(self):
         for name in ("", "\u0301", "\u0301\u0308"):
