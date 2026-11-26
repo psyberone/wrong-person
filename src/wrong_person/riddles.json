@@ -1,6 +1,6 @@
 {
  "_rules": [
-  "Each key is a first name a suspect could have: one capitalised word, 9 letters or fewer.",
+  "Each key is a first name a suspect could have: one word of at most 9 letters, A to Z with or without accents, starting with a capital and not all capitals.",
   "Each riddle is a noun phrase that completes 'Police have arrested ___' and opens '___ is next to the killer'.",
   "A riddle must point to exactly one first name, and must not contain that name.",
   "Keep it REALLY easy: the answer should be in the first one or two search results for the riddle.",

@@ -48,6 +48,97 @@ test two letter sets and two names (two things are always in one sorted order
 or its reverse) and tried the copy with a list only. E157 and E158 change the
 caller's own lists once they are copied: the tests caught them as they stood,
 and they stood in no list.
+
+E159 to E173 came with the change that holds the names in a riddle table to
+plain letters A to Z, with a capital first and not all capitals, and refuses a
+riddle holding a character that cannot go on a page (issue #5). They carry the
+tag `u7` for the work unit. The AI coding assistant planted them against its
+own change. E030 was written again for the same change: the words it replaces
+changed.
+
+E174 to E187 came from the review of that change, and carry the tag `u7r`.
+E183 to E186 are faults the AI reviewers planted that no test caught. The rest
+are the AI coding assistant's, for what the review changed: accents come off
+with Unicode 3.2's tables and only as marks, the give-away check reads both
+name and riddle in plain letters, a riddle may not hold what Unicode draws as
+nothing, sentence() and arrest() refuse what a table refuses, and a name's
+refusal says which character is not a letter A to Z. E038, E039, E040, E084
+and E170 were written again: the words they replace changed.
+
+E188 to E193 came from the re-check of that change, and carry the tag `u7r2`.
+Each is a fault the AI reviewers planted that no test caught: a riddle looked
+at with its ends trimmed, in sentence() and arrest(), in the look itself or in
+the table check; only marks over a letter come off, or a mark through a letter
+stays on; the six kinds are looked for before what Unicode draws as nothing.
+
+E194 and E195 came from the second re-check, and carry the tag `u7r3`. Each
+takes off only some kinds of mark: E194 leaves the horn on, and E195 a mark
+below a letter as well.
+
+E196 to E199 came from the fourth re-check, and carry the tag `u7r5`. E196 and
+E197 are faults the AI reviewers planted that no test caught: an enclosing
+mark comes off, or a spacing mark. E198 and E199 are the AI coding
+assistant's, for what the re-check changed: a name's refusal names the
+character as written, not what is left of it once the accents come off. E198
+names what is left, as before, and E199 names an accent written apart from
+its letter. E181 and E182 were written again: the line they change changed.
+
+E200 to E203 came from the fifth re-check, and carry the tag `u7r6`. E200 to
+E202 are faults the AI reviewers planted that no test caught: a name is looked
+at with its ends trimmed, or its refusal looks past them, or joins each accent
+to its letter before naming a character. E203 is the AI coding assistant's,
+for what the re-check changed: "starting with a capital" is read from the name
+as written, so a name may not start with an accent. E030 and E159 were written
+again: the words they replace changed.
+
+E204 to E209 came from the sixth re-check, and carry the tag `u7r7`. E204 and
+E205 are the AI coding assistant's, for what the re-check changed: the refusal
+of a name that starts with a mark gives the mark's code, since the mark draws
+on the quote before the name. E204 leaves that out, as before, and E205 names
+a later character first. E206 to E209 trim only line breaks, or only tabs,
+from a name, before checking it or before naming a character; E206 and E208
+are faults the AI reviewers planted that no test caught. E180 was written
+again: the words it replaces changed. E200's label now says that only a space
+or line break at a name's end passes, since the capital is read as written.
+
+E210 to E219 came from the seventh re-check, and carry the tag `u7r8`. They are
+the ten changes to the new ending that the AI reviewers and the AI coding
+assistant found passing every test: its code in lower case; the mark found by
+its combining class, Unicode 3.2's or this Python's, or by its category, or a
+hidden character taken for one; the code read once accents are joined or
+letters are split; white space looked past; and the ending given as well to a
+mark that has this Python's class. The owner chose to keep the behaviour and
+test its edges, so each is killed by a case added with them.
+
+E220 to E227 came from the eighth re-check, and carry the tag `u7r9`. They are
+eight more changes to where the new ending starts and stops that the AI
+reviewers found passing every test: the mark found by Unicode 3.2's category,
+alone or beside its class; a mark that comes off taken only when its category,
+Unicode 3.2's or this Python's, is Mn; a mark taken when making it plain
+changes it; a character Unicode says to draw as nothing taken for a mark; and a
+byte order mark looked past. The owner chose one test that tries every
+character first in a name, so each is killed by that test.
+
+E228 to E232 came from the ninth re-check, and carry the tag `u7r10`. They are
+five changes that tie the ending to the rest of the name, or to its riddles,
+which the AI reviewers found passing every test: the ending only when the name
+has at most 9 letters, is not all capitals, has no small letter first, has no
+space after the mark, or has its riddles in a list. The owner chose wider cases:
+after each mark that comes off whole, the test tries an example of each reason
+the name rule gives, and riddles that are missing or not a list, so each is
+killed by that test. E221's label no longer gives a count: it is eleven on
+newer Pythons and ten on 3.10.
+
+E233 to E247 came from the tenth re-check, and carry the tag `u7r11`. They are
+fifteen more conditions on the same ending, which the AI reviewers found passing
+every test: the ending kept only when the name holds no tab, line break or
+character that cannot go on a page; when it is the first name in the table, no
+earlier name was refused, or none is the same in plain letters; or when its
+riddles are all text, are at most one, or have none of the problems the check
+reports for a riddle. The owner chose to close them: after each mark the test
+now also tries a tab and a hidden character in the name, and a table where a
+refused twin comes first and the riddles hold each problem the check reports
+for a riddle, so each is killed by that test.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -153,7 +244,7 @@ FAULTS = [
      [(E, "len(set(self.value.upper()))", "len(set(self.value))")]),
     ("E030 [G4-C1] a table name need not start with a capital",
      "test_engine.Wording.test_a_name_in_the_table_starts_with_a_capital",
-     [(W, "name.isalpha() and name[0].isupper() and", "name.isalpha() and")]),
+     [(W, "and name[0].isupper() and not plain.isupper()):", "and not plain.isupper()):")]),
     ("E031 [G4-C3] a table value need not be a list",
      "test_engine.Wording.test_a_name_needs_a_list_even_for_one_riddle",
      [(W, "if not isinstance(lines, list) or not lines:", "if not lines:")]),
@@ -179,13 +270,16 @@ FAULTS = [
     # ---- wording and the riddle file
     ("E038 [G4-C4] the name check is case-sensitive",
      "test_engine.Wording.test_a_riddle_gives_the_name_away_in_any_case", [
-        (W, 'return name.lower() in re.findall(r"[^\\W\\d_]+", riddle.lower())', 'return name in re.findall(r"[^\\W\\d_]+", riddle)')]),
+        (W, 'return _plain(name).lower() in re.findall(r"[^\\W\\d_]+", _plain(riddle).lower())',
+            'return _plain(name) in re.findall(r"[^\\W\\d_]+", _plain(riddle))')]),
     ("E039 [G1-F2] the name check splits on spaces and the straight apostrophe only",
      "test_engine.Wording.test_a_riddle_gives_the_name_away_whatever_touches_it", [
-        (W, 'return name.lower() in re.findall(r"[^\\W\\d_]+", riddle.lower())', 'return name.lower() in riddle.lower().replace("\'", " ").split()')]),
+        (W, 'return _plain(name).lower() in re.findall(r"[^\\W\\d_]+", _plain(riddle).lower())',
+            'return _plain(name).lower() in _plain(riddle).lower().replace("\'", " ").split()')]),
     ("E040 [own] the name check looks inside longer words",
      "test_engine.Wording.test_a_name_inside_a_longer_word_gives_nothing_away", [
-        (W, 'return name.lower() in re.findall(r"[^\\W\\d_]+", riddle.lower())', 'return name.lower() in riddle.lower()')]),
+        (W, 'return _plain(name).lower() in re.findall(r"[^\\W\\d_]+", _plain(riddle).lower())',
+            'return _plain(name).lower() in _plain(riddle).lower()')]),
     ("E041 [G2-F7] sentence prints a riddle that holds the name",
      "test_engine.Wording.test_a_riddle_that_holds_the_name_is_refused", [
         (W, '        if _gives_away(rule.value, who):\n            raise ValueError(f"the riddle {who!r} gives the name away")\n', '')]),
@@ -298,7 +392,7 @@ FAULTS = [
      "test_engine.Wording.test_a_riddle_that_holds_the_name_is_refused", [
         (W, "        if _gives_away(rule.value, who):", "        if yes and _gives_away(rule.value, who):")]),
     ("E074 [G2w-N1b] the name check knows only a to z",
-     "test_engine.Wording.test_a_name_with_an_accent_is_guarded_like_any_other",
+     "test_engine.Wording.test_a_name_inside_a_longer_word_gives_nothing_away",
      [(W, 'r"[^\\W\\d_]+"', 'r"[a-z]+"')]),
     ("E075 [G2w-N1c] positive is not checked on an 'is' rule",
      "test_engine.Semantics.test_a_rule_is_for_or_against_and_nothing_else", [
@@ -333,8 +427,8 @@ FAULTS = [
             "            return NOTE\n")]),
     ("E084 [G4w-K27] a word's final s is not counted",
      "test_engine.Wording.test_a_name_inside_a_longer_word_gives_nothing_away", [
-        (W, 'return name.lower() in re.findall(r"[^\\W\\d_]+", riddle.lower())',
-            'return name.lower() in [word.rstrip("s") for word in re.findall(r"[^\\W\\d_]+", riddle.lower())]')]),
+        (W, 'return _plain(name).lower() in re.findall(r"[^\\W\\d_]+", _plain(riddle).lower())',
+            'return _plain(name).lower() in [word.rstrip("s") for word in re.findall(r"[^\\W\\d_]+", _plain(riddle).lower())]')]),
     ("E085 [G4w-K30] a name is checked for truth, not for text",
      "test_engine.Geometry.test_a_name_that_is_not_text_is_refused", [
         (E, "isinstance(name, str) and name.isalpha() for name in names", "name and name.isalpha() for name in names")]),
@@ -593,4 +687,307 @@ FAULTS = [
      [(E, "    letter_sets, named = tuple(letter_sets), tuple(named)      # copied once: what is checked is what is used\n",
           "    theirs, letter_sets, named = named, tuple(letter_sets), tuple(named)\n"
           "    if isinstance(theirs, list):\n        theirs.clear()\n")]),
+    # ---- what a riddle table may hold (issue #5)
+    ("E159 [u7] a name in all capitals passes",
+     "test_engine.Wording.test_a_name_in_all_capitals_is_refused",
+     [(W, "name[0].isupper() and not plain.isupper()):", "name[0].isupper()):")]),
+    ("E160 [u7] a name is checked with its accents still on",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "        plain = _plain(name)\n", "        plain = name\n")]),
+    ("E161 [u7] a name may be written in any letters, not only A to Z",
+     "test_engine.Wording.test_a_name_with_letters_that_have_no_plain_form_is_refused",
+     [(W, "if not (plain.isascii() and plain.isalpha()", "if not (plain.isalpha()")]),
+    ("E162 [u7] two names that are one in plain letters both pass",
+     "test_engine.Wording.test_two_names_that_are_one_in_plain_letters_are_refused", [
+        (W, "        if plain.lower() in plain_names:\n"
+            "            problems.append(f\"{name!r} and {plain_names[plain.lower()]!r} are one name in plain letters\")\n",
+            "")]),
+    ("E163 [u7] a riddle may hold a character that cannot go on a page",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused", [
+        (W, "            if hidden is not None:\n"
+            "                problems.append(f\"{name}: {line!r} holds U+{ord(hidden):04X}, \"\n"
+            "                                \"a character that cannot go on a page\")\n",
+            "")]),
+    ("E164 [u7] a riddle may hold a control character",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cf", "Cs", "Co", "Zl", "Zp"})')]),
+    ("E165 [u7] a riddle may hold a format character, such as a zero-width space",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cc", "Cs", "Co", "Zl", "Zp"})')]),
+    ("E166 [u7] a riddle may hold half of a surrogate pair",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cc", "Cf", "Co", "Zl", "Zp"})')]),
+    ("E167 [u7] a riddle may hold a private-use character",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})')]),
+    ("E168 [u7] a riddle may hold a line separator",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cc", "Cf", "Cs", "Co", "Zp"})')]),
+    ("E169 [u7] a riddle may hold a paragraph separator",
+     "test_engine.Wording.test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused",
+     [(W, 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})', 'frozenset({"Cc", "Cf", "Cs", "Co", "Zl"})')]),
+    ("E170 [u7] the refusal names the last such character, not the first",
+     "test_engine.Wording.test_only_the_first_such_character_is_named",
+     [(W, "for char in text if unicodedata", "for char in reversed(text) if unicodedata")]),
+    ("E171 [u7] riddles.json: the table's note no longer states the name rule",
+     "test_engine.Wording.test_the_riddle_table_states_the_name_rule_the_checker_holds",
+     [(J, "one word of at most 9 letters, A to Z with or without accents, starting with a capital and not all capitals.",
+          "one capitalised word, 9 letters or fewer.")]),
+    ("E172 [u7] a name's length is counted as written, accent marks included",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "and len(plain) <= 9", "and len(name) <= 9")]),
+    ("E173 [u7] two names that differ only in their capitals are two names",
+     "test_engine.Wording.test_two_names_that_are_one_in_plain_letters_are_refused", [
+        (W, "if plain.lower() in plain_names:", "if plain in plain_names:"),
+        (W, "plain_names[plain.lower()]!r}", "plain_names[plain]!r}"),
+        (W, "plain_names.setdefault(plain.lower(), name)", "plain_names.setdefault(plain, name)")]),
+    # ---- from the review of that change
+    ("E174 [u7r] accents are taken off with this Python's tables, not Unicode 3.2's",
+     "test_engine.Wording.test_accents_come_off_by_tables_every_python_holds_alike",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", "if not unicodedata.combining(char))")]),
+    ("E175 [u7r] a name in another form of letters, such as full width, passes as plain letters",
+     "test_engine.Wording.test_a_name_in_other_forms_of_letters_is_refused",
+     [(W, 'unicodedata.ucd_3_2_0.normalize("NFD", text)', 'unicodedata.ucd_3_2_0.normalize("NFKD", text)')]),
+    ("E176 [u7r] the give-away check reads the name with its accents on",
+     "test_engine.Wording.test_the_name_is_found_in_its_riddle_in_plain_letters",
+     [(W, "return _plain(name).lower() in", "return name.lower() in")]),
+    ("E177 [u7r] the give-away check reads the riddle with its accents on",
+     "test_engine.Wording.test_the_name_is_found_in_its_riddle_in_plain_letters",
+     [(W, ", _plain(riddle).lower())", ", riddle.lower())")]),
+    ("E178 [u7r] a riddle may hold what Unicode draws as nothing, if it is not a format character",
+     "test_engine.Wording.test_every_character_unicode_draws_as_nothing_is_refused_in_a_riddle",
+     [(W, " in _UNPRINTED\n                 or any(low <= ord(char) <= high for low, high in _IGNORABLE)), None)",
+          " in _UNPRINTED), None)")]),
+    ("E179 [u7r] sentence() and arrest() print a riddle holding a character that cannot go on a page",
+     "test_engine.Wording.test_a_riddle_that_cannot_go_on_a_page_is_refused_wherever_it_is_printed", [
+        (W, "    hidden = _unprinted(riddle)\n    if hidden is not None:\n"
+            "        raise ValueError(f\"the riddle {riddle!r} holds U+{ord(hidden):04X}, a character that cannot go on a page\")\n",
+            "")]),
+    ("E180 [u7r] the refusal of a name does not say which character is not a letter A to Z",
+     "test_engine.Wording.test_the_refusal_names_the_first_character_that_is_not_a_letter_a_to_z",
+     [(W, 'why = "" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z"', 'why = ""')]),
+    ("E181 [u7r] the refusal of a name names its last character that is not a letter A to Z",
+     "test_engine.Wording.test_a_name_with_letters_that_have_no_plain_form_is_refused",
+     [(W, "for char in name\n", "for char in reversed(name)\n")]),
+    ("E182 [u7r] the refusal of a name looks for that character with the accents still on",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "for part in _plain(char))), None)", "for part in char)), None)")]),
+    ("E183 [u7r] a name that breaks the rule is not checked against the names before it",
+     "test_engine.Wording.test_a_name_that_breaks_the_rule_is_still_checked_against_the_others",
+     [(W, "        if plain.lower() in plain_names:", "        elif plain.lower() in plain_names:")]),
+    ("E184 [u7r] a name without a list of riddles is not remembered as a name",
+     "test_engine.Wording.test_a_name_without_a_list_of_riddles_still_counts_as_a_name", [
+        (W, "        plain_names.setdefault(plain.lower(), name)\n"
+            "        if not isinstance(lines, list) or not lines:\n"
+            "            problems.append(f\"{name} needs a list with at least one riddle\")\n"
+            "            continue\n",
+            "        if not isinstance(lines, list) or not lines:\n"
+            "            problems.append(f\"{name} needs a list with at least one riddle\")\n"
+            "            continue\n"
+            "        plain_names.setdefault(plain.lower(), name)\n")]),
+    ("E185 [u7r] the refusal of a riddle names the lowest such character, not the first",
+     "test_engine.Wording.test_only_the_first_such_character_is_named", [
+        (W, "return next((char for char in text if", "return min((char for char in text if"),
+        (W, "_IGNORABLE)), None)", "_IGNORABLE)), default=None)")]),
+    ("E186 [u7r] accents are taken off by dropping every mark, a grapheme joiner and a variation selector too",
+     "test_engine.Wording.test_a_name_with_a_hidden_character_is_refused",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", 'if unicodedata.ucd_3_2_0.category(char) != "Mn")')]),
+    ("E187 [u7r] a riddle may hold a variation selector from U+E0100 on, or a code point kept for more of them",
+     "test_engine.Wording.test_every_character_unicode_draws_as_nothing_is_refused_in_a_riddle",
+     [(W, ", (0xE0000, 0xE0FFF))", ")")]),
+    # ---- from the re-check of that change
+    ("E188 [u7r2] sentence() and arrest() look for a hidden character in the riddle with its ends trimmed",
+     "test_engine.Wording.test_a_riddle_that_cannot_go_on_a_page_is_refused_wherever_it_is_printed",
+     [(W, "hidden = _unprinted(riddle)", "hidden = _unprinted(riddle.strip())")]),
+    ("E189 [u7r2] the look for a hidden character trims the text first",
+     "test_engine.Wording.test_a_riddle_that_cannot_go_on_a_page_is_refused_wherever_it_is_printed",
+     [(W, "for char in text if unicodedata", "for char in text.strip() if unicodedata")]),
+    ("E190 [u7r2] the table check looks for a hidden character in the riddle with its ends trimmed",
+     "test_engine.Wording.test_a_hidden_character_at_either_end_of_a_riddle_is_named_too",
+     [(W, "hidden = _unprinted(line)", "hidden = _unprinted(line.strip())")]),
+    ("E191 [u7r2] only marks drawn over a letter come off, not under or through it",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", "if unicodedata.ucd_3_2_0.combining(char) != 230)")]),
+    ("E192 [u7r2] a mark drawn through a letter stays on",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", "if unicodedata.ucd_3_2_0.combining(char) in (0, 1))")]),
+    ("E193 [u7r2] the refusal of a riddle names the first of the six kinds before what Unicode draws as nothing",
+     "test_engine.Wording.test_only_the_first_such_character_is_named",
+     [(W, " in _UNPRINTED\n                 or any(low <= ord(char) <= high for low, high in _IGNORABLE)), None)",
+          " in _UNPRINTED), None) or next(\n                 (char for char in text if any(low <= ord(char) <= high for low, high in _IGNORABLE)), None)")]),
+    # ---- from the second re-check
+    ("E194 [u7r3] only marks over, under or through a letter come off: the horn stays on",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", "if unicodedata.ucd_3_2_0.combining(char) not in (1, 202, 220, 230))")]),
+    ("E195 [u7r3] a mark below a letter stays on, such as a comma, and the horn too",
+     "test_engine.Wording.test_a_name_is_counted_in_its_plain_letters",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))", "if unicodedata.ucd_3_2_0.combining(char) not in (1, 202, 230))")]),
+    # ---- from the fourth re-check
+    ("E196 [u7r5] an enclosing mark comes off, such as a circle drawn round a letter",
+     "test_engine.Wording.test_a_name_with_an_enclosing_or_spacing_mark_is_refused",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))",
+       "if not unicodedata.ucd_3_2_0.combining(char) and unicodedata.ucd_3_2_0.category(char) != 'Me')")]),
+    ("E197 [u7r5] a spacing mark comes off, such as a vowel sign beside its letter",
+     "test_engine.Wording.test_a_name_with_an_enclosing_or_spacing_mark_is_refused",
+     [(W, "if not unicodedata.ucd_3_2_0.combining(char))",
+       "if not unicodedata.ucd_3_2_0.combining(char) and unicodedata.ucd_3_2_0.category(char) != 'Mc')")]),
+    ("E198 [u7r5] the refusal of a name names what is left once the accents come off, not what was written",
+     "test_engine.Wording.test_the_refusal_of_a_name_names_the_character_as_written",
+     [(W, "for char in name\n                        if not all(part.isascii() and part.isalpha() for part in _plain(char))), None)",
+       "for char in plain if not (char.isascii() and char.isalpha())), None)")]),
+    ("E199 [u7r5] the refusal of a name names an accent written apart from its letter",
+     "test_engine.Wording.test_the_refusal_of_a_name_names_the_character_as_written",
+     [(W, "if not all(part.isascii() and part.isalpha() for part in _plain(char))), None)",
+       "if not (_plain(char).isascii() and _plain(char).isalpha())), None)")]),
+    # ---- from the fifth re-check
+    ("E200 [u7r6] a name is looked at with its ends trimmed, so a space or line break at its end passes",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "        plain = _plain(name)\n", "        plain = _plain(name.strip())\n")]),
+    ("E201 [u7r6] the refusal of a name looks past a space or line break at either end, and names nothing",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "for char in name\n", "for char in name.strip()\n")]),
+    ("E202 [u7r6] the refusal of a name joins each accent to its letter first, and names what was not written",
+     "test_engine.Wording.test_the_refusal_of_a_name_names_the_character_as_written",
+     [(W, "for char in name\n", 'for char in unicodedata.normalize("NFC", name)\n')]),
+    ("E203 [u7r6] the capital is read from the plain form, so an accent before the first letter passes",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, "and name[0].isupper() and not plain.isupper()", "and plain[0].isupper() and not plain.isupper()")]),
+    # ---- from the sixth re-check
+    ("E204 [u7r7] the refusal of a name that starts with a mark does not give the mark's code",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, "if name and not _plain(name[0]):", "if False:")]),
+    ("E205 [u7r7] the refusal of a name that starts with a mark names a later character first",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, "if name and not _plain(name[0]):", "if odd is None and name and not _plain(name[0]):")]),
+    ("E206 [u7r7] a name is looked at with line breaks trimmed from its ends, so one at its end passes",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "        plain = _plain(name)\n", '        plain = _plain(name.strip("\\n"))\n')]),
+    ("E207 [u7r7] a name is looked at with tabs trimmed from its ends, so one at its end passes",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "        plain = _plain(name)\n", '        plain = _plain(name.strip("\\t"))\n')]),
+    ("E208 [u7r7] the refusal of a name looks past line breaks at its ends, and names nothing",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "for char in name\n", 'for char in name.strip("\\n")\n')]),
+    ("E209 [u7r7] the refusal of a name looks past tabs at its ends, and names nothing",
+     "test_engine.Wording.test_a_name_with_a_digit_a_sign_or_a_space_is_refused",
+     [(W, "for char in name\n", 'for char in name.strip("\\t")\n')]),
+    # ---- from the seventh re-check
+    ("E210 [u7r8] the code of a leading mark is written in lower case",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'U+{ord(name[0]):04X}, before any letter', 'U+{ord(name[0]):04x}, before any letter')]),
+    ("E211 [u7r8] a leading mark gets the ending by its Unicode 3.2 class, so three Tibetan signs name nothing",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.ucd_3_2_0.combining(name[0]):')]),
+    ("E212 [u7r8] a leading mark gets the ending by this Python's class, so it hangs on the Python",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.combining(name[0]):')]),
+    ("E213 [u7r8] every leading mark gets the ending, even one that stays on",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.category(name[0]).startswith("M"):')]),
+    ("E214 [u7r8] a hidden character first gets the ending, as if it were a mark",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name and (not _plain(name[0]) or _unprinted(name[0]) is not None):')]),
+    ("E215 [u7r8] the code of a leading mark is read once accents are joined, and is not the one written",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'U+{ord(name[0]):04X}, before any letter', "U+{ord(unicodedata.normalize('NFC', name)[0]):04X}, before any letter")]),
+    ("E216 [u7r8] the code of a leading mark is read once letters are split, and is not the one written",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'U+{ord(name[0]):04X}, before any letter', "U+{ord(unicodedata.normalize('NFD', name)[0]):04X}, before any letter")]),
+    ("E217 [u7r8] a leading mark is looked for past white space, and the space gets the ending",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name.strip() and not _plain(name.strip()[0]):')]),
+    ("E218 [u7r8] a leading mark is looked for past white space, and named instead of the space",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name.strip() and not _plain(name.strip()[0]):'),
+      (W, 'U+{ord(name[0]):04X}, before any letter', 'U+{ord(name.strip()[0]):04X}, before any letter')]),
+    ("E219 [u7r8] a leading mark with this Python's class gets the ending too, so it hangs on the Python",
+     "test_engine.Wording.test_a_name_that_starts_with_an_accent_is_refused",
+     [(W, 'if name and not _plain(name[0]):', 'if name and (not _plain(name[0]) or unicodedata.combining(name[0])):')]),
+    # ---- from the eighth re-check
+    ("E220 [u7r9] a leading mark gets the ending by Unicode 3.2's category Mn, so marks that stay on get it, and eight that come off do not",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.ucd_3_2_0.category(name[0]) == "Mn":')]),
+    ("E221 [u7r9] only a leading mark that comes off and has this Python's category Mn gets the ending, so some name nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and unicodedata.category(name[0]) == "Mn":')]),
+    ("E222 [u7r9] a leading mark that changes when made plain gets the ending, so marks that split but stay on get it",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.category(name[0]).startswith("M") and _plain(name[0]) != name[0]:')]),
+    ("E223 [u7r9] a leading mark gets the ending by Unicode 3.2's category Mn or Mc, so marks that stay on get it",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.ucd_3_2_0.category(name[0]) in ("Mn", "Mc"):')]),
+    ("E224 [u7r9] a leading mark gets the ending by its Unicode 3.2 class or its category Mn, so marks that stay on get it",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and (unicodedata.ucd_3_2_0.combining(name[0]) or unicodedata.ucd_3_2_0.category(name[0]) == "Mn"):')]),
+    ("E225 [u7r9] only a leading mark that comes off and has Unicode 3.2's category Mn gets the ending, so eight name nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and unicodedata.ucd_3_2_0.category(name[0]) == "Mn":')]),
+    ("E226 [u7r9] a character first that Unicode says to draw as nothing gets the ending, as if it were a mark",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and (not _plain(name[0]) or any(low <= ord(name[0]) <= high for low, high in _IGNORABLE)):')]),
+    ("E227 [u7r9] a byte order mark first is looked past, and is called a mark when one follows it",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name.lstrip("\\ufeff") and not _plain(name.lstrip("\\ufeff")[0]):')]),
+    # ---- from the ninth re-check
+    ("E228 [u7r10] a leading mark gets the ending only when the name has at most 9 letters, so a longer one names nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and len(plain) <= 9:')]),
+    ("E229 [u7r10] a leading mark gets the ending only when the name is not all capitals, so TOM after it names nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not plain.isupper():')]),
+    ("E230 [u7r10] a leading mark gets the ending only when no small letter starts the name, so tom after it names nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not plain[:1].islower():')]),
+    ("E231 [u7r10] a leading mark gets the ending only when the riddles are a list, so a name without one names nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and isinstance(lines, list):')]),
+    ("E232 [u7r10] a leading mark gets the ending only when no space follows it, and the space is named instead",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and name[1:2] != " ":')]),
+    # ---- from the tenth re-check
+    ("E233 [u7r11] a leading mark gets the ending only when the name is printable, so a tab or hidden character after it takes it away",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and name.isprintable():')]),
+    ("E234 [u7r11] a leading mark gets the ending only when no earlier name is the same in plain letters",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and plain.lower() not in plain_names:')]),
+    ("E235 [u7r11] a leading mark gets the ending only when nothing earlier in the table was refused",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not problems:')]),
+    ("E236 [u7r11] a leading mark gets the ending only when no riddle in its list is blank or not text",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and any(not isinstance(line, str) or not line.strip() for line in lines)):')]),
+    ("E237 [u7r11] a leading mark loses the ending when a later character that cannot go on a page is named instead",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and (odd is None or _unprinted(odd) is None):')]),
+    ("E238 [u7r11] a leading mark gets the ending only when nothing in the name cannot go on a page",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and _unprinted(name) is None:')]),
+    ("E239 [u7r11] a leading mark gets the ending only when every riddle in its list is text",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and any(not isinstance(line, str) for line in lines)):')]),
+    ("E240 [u7r11] a leading mark gets the ending only when its list holds at most one riddle",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and len(lines) > 1):')]),
+    ("E241 [u7r11] a leading mark gets the ending only when no tab or line break is in the name",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not any(char in name for char in "\\t\\n\\r"):')]),
+    ("E242 [u7r11] a leading mark gets the ending only when its name is the first in the table",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not plain_names:')]),
+    ("E243 [u7r11] a leading mark loses the ending when a riddle has a space at either end or a full stop",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', "if name and not _plain(name[0]) and not (isinstance(lines, list) and any(isinstance(x, str) and (x != x.strip() or x.endswith('.')) for x in lines)):")]),
+    ("E244 [u7r11] a leading mark loses the ending when a riddle is said twice under the name",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and len({str(x).lower() for x in lines}) < len(lines)):')]),
+    ("E245 [u7r11] a leading mark loses the ending when a riddle gives the name away",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and any(isinstance(x, str) and _gives_away(name, x) for x in lines)):')]),
+    ("E246 [u7r11] a leading mark loses the ending when a riddle holds a character that cannot go on a page",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and any(isinstance(x, str) and _unprinted(x) is not None for x in lines)):')]),
+    ("E247 [u7r11] a leading mark loses the ending when a riddle is under an earlier name too",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', "if name and not _plain(name[0]) and not (isinstance(lines, list) and any(isinstance(x, str) and ' '.join(x.lower().split()) in seen for x in lines)):")]),
 ]

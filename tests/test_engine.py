@@ -8,6 +8,7 @@ import random
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import unittest
 from pathlib import Path
 
@@ -617,6 +618,25 @@ class WholeCase(unittest.TestCase):
 
 
 class Wording(unittest.TestCase):
+    RULE = ("must be one word of at most 9 letters, A to Z with or without accents, "
+            "starting with a capital and not all capitals")
+    RIDDLE_OK = "the cat who chases Jerry"
+    PAGE = "a character that cannot go on a page"
+    # Unicode's "default ignorable" code points, as its file DerivedCoreProperties.txt 16.0.0 lists them
+    IGNORABLE = ((0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C), (0x115F, 0x1160), (0x17B4, 0x17B5),
+                 (0x180B, 0x180F), (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x206F), (0x3164, 0x3164),
+                 (0xFE00, 0xFE0F), (0xFEFF, 0xFEFF), (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8), (0x1BCA0, 0x1BCA3),
+                 (0x1D173, 0x1D17A), (0xE0000, 0xE0FFF))
+
+    def refusal(self, name, odd=None):
+        """How a name that breaks the rule is refused; `odd` is the first character, as written in it,
+        that is not a letter A to Z with or without accents."""
+        return f"{name!r} {self.RULE}" + ("" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z")
+
+    def refusal_for_a_mark(self, name, code):
+        """How a name whose first character is a mark that comes off whole is refused: by the mark's code."""
+        return f"{name!r} {self.RULE}: it starts with an accent or other mark, U+{code}, before any letter"
+
     def test_sentences(self):
         say = wording.sentence
         self.assertEqual(say(CASE[0]), "There is no name beginning with L on the killer's page.")
@@ -722,6 +742,31 @@ class Wording(unittest.TestCase):
             wording.sentence(e.Rule("near", "is", zoe, False), riddle)
         self.assertEqual(wording.check_riddles({zoe: ["the daughter of Lenny Kravitz"]}), [])
 
+    def test_the_name_is_found_in_its_riddle_in_plain_letters(self):
+        # an accent on either side, written as a mark of its own, or under the letter, does not hide the name
+        cases = [("Zo\u00eb", "the actress Zoe Kravitz"), ("Zoe", "the actress Zo\u00eb Kravitz"),
+                 ("Zo\u00eb", "the actress Zoe\u0308 Kravitz"), ("Zoe\u0308", "the actress Zo\u00eb Kravitz"),
+                 ("Francois", "the singer Fran\u00e7ois Hardy")]
+        for name, riddle in cases:
+            self.assertEqual(wording.check_riddles({name: [riddle]}), [f"{name}: {riddle!r} gives the name away"], riddle)
+        for name, riddle in cases[:3] + cases[4:]:      # the engine's own Rule takes no name with a mark of its own
+            with self.assertRaisesRegex(ValueError, "gives the name away$"):
+                wording.sentence(e.Rule("near", "is", name, False), riddle)
+
+    def test_a_riddle_that_cannot_go_on_a_page_is_refused_wherever_it_is_printed(self):
+        # inside the riddle, or at either end of it, where a check of the trimmed riddle would miss it
+        for riddle, code in (("the cat called To\u200bm", 0x200B), ("the singer\u034f of Thriller", 0x034F),
+                             ("the singer of\nThriller", 0x000A), ("the singer of Thriller\n", 0x000A),
+                             ("\tthe singer of Thriller", 0x0009), ("the singer of Thriller\u2028", 0x2028)):
+            message = f"the riddle {riddle!r} holds U+{code:04X}, {self.PAGE}"
+            with self.assertRaises(ValueError) as refused:
+                wording.arrest(riddle)
+            self.assertEqual(str(refused.exception), message)
+            for positive in (True, False):
+                with self.assertRaises(ValueError) as refused:
+                    wording.sentence(e.Rule("near", "is", "Tom", positive), riddle)
+                self.assertEqual(str(refused.exception), message)
+
     def test_a_riddle_may_hold_somebody_elses_name(self):
         self.assertEqual(wording.sentence(e.Rule("line", "is", "Homer"), "Bart Simpson's father"),
                          "Bart Simpson's father is on the killer's line.")
@@ -794,11 +839,167 @@ class Wording(unittest.TestCase):
     def test_a_name_may_have_nine_letters_and_no_more(self):
         self.assertEqual(wording.check_riddles({"Elizabeth": ["the longest-reigning British queen"]}), [])
         self.assertEqual(wording.check_riddles({"Maximilian": ["the emperor of Mexico shot in 1867"]}),
-                         ["'Maximilian' must be one capitalised word of at most 9 letters"])
+                         [f"'Maximilian' {self.RULE}"])
 
     def test_a_name_in_the_table_starts_with_a_capital(self):
         self.assertEqual(wording.check_riddles({"tom": ["the cat who chases Jerry"]}),
-                         ["'tom' must be one capitalised word of at most 9 letters"])
+                         [f"'tom' {self.RULE}"])
+
+    def test_a_name_that_starts_with_an_accent_is_refused(self):
+        # "starting with a capital" is read as written, so an accent before the first letter breaks it;
+        # the accent draws on the quote before the name, so the refusal says what it is, by its code. U+0F73
+        # has no class of its own but comes off whole; U+0341 is given by its own code, not by U+0301's
+        for name, code in (("\u0301Tom", "0301"), ("\u0308Zo\u00eb", "0308"), ("\u0f73Tom", "0F73"),
+                           ("\u0341Tom", "0341")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal_for_a_mark(name, code)],
+                             ascii(name))
+        # the accent comes first, so it is named before a later letter that has no plain form
+        name = "\u0301S\u00f8ren"
+        self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal_for_a_mark(name, "0301")])
+        # only a mark that comes off whole gets that ending: a hidden character, an enclosing circle, a mark newer
+        # than Unicode 3.2, and a space before an accent are named first as any other character is
+        for name, odd in (("\u200bTom", "\u200b"), ("\u20ddTom", "\u20dd"), ("\u1dc4Tom", "\u1dc4"),
+                          (" \u0301Tom", " ")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], ascii(name))
+
+    def test_only_a_mark_that_comes_off_whole_gets_the_ending(self):
+        # the owner chose that only a name starting with one of the 330 marks that come off whole gets the ending:
+        # those Unicode 3.2 gives a combining class, and three Tibetan vowel signs made of such marks alone. Every
+        # code point is tried first, before Tom and before an accent and Tom, so that no other character gets it and
+        # nothing written first is looked past. The sweep gives each name no riddle, which keeps it to seconds
+        comes_off = {point for point in range(0x110000) if unicodedata.ucd_3_2_0.combining(chr(point))}
+        comes_off |= {0x0F73, 0x0F75, 0x0F81}
+        self.assertEqual(len(comes_off), 330)
+        hidden = "the c\u200bat"
+        for point in sorted(comes_off):
+            # after each mark the test tries an example of each reason the name rule gives, a tab and a hidden
+            # character; riddles that are missing or not a list; and a table where a refused twin comes first and
+            # the riddles hold each problem the check reports for a riddle. Whichever of these is also wrong, the
+            # mark that comes first is named
+            for rest in ("Tom", "\u0301Tom", "TOM", "tom", "Abcdefghij", " Tom", "T0m", "S\u00f8ren", "",
+                         "Tom\t", "To\u200bm"):
+                name = chr(point) + rest
+                self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}),
+                                 [self.refusal_for_a_mark(name, f"{point:04X}")], ascii(name))
+            name = chr(point) + "Tom"
+            for lines in ([], "the cat", None):
+                self.assertEqual(wording.check_riddles({name: lines}),
+                                 [self.refusal_for_a_mark(name, f"{point:04X}"),
+                                  f"{name} needs a list with at least one riddle"], ascii(name))
+            table = {"tom": [self.RIDDLE_OK],
+                     name: [self.RIDDLE_OK, "", 5, "the dog.", "the dog.", "Tom ran", hidden]}
+            self.assertEqual(wording.check_riddles(table),
+                             [self.refusal("tom"), self.refusal_for_a_mark(name, f"{point:04X}"),
+                              f"{name!r} and 'tom' are one name in plain letters",
+                              f"{self.RIDDLE_OK!r} is under both tom and {name}",
+                              f"{name}: '' is not a riddle", f"{name}: 5 is not a riddle",
+                              f"{name}: 'the dog.' should have no outer spaces or full stop",
+                              f"{name}: 'the dog.' is listed twice",
+                              f"{name}: 'the dog.' should have no outer spaces or full stop",
+                              f"{name}: 'Tom ran' gives the name away",
+                              f"{name}: {hidden!r} holds U+200B, a character that cannot go on a page"], ascii(name))
+
+        def get_the_ending(rest):
+            return {point for point in range(0x110000)
+                    if any("before any letter" in problem for problem in wording.check_riddles({chr(point) + rest: []}))}
+        self.assertEqual(get_the_ending("Tom"), comes_off)
+        self.assertEqual(get_the_ending("\u0301Tom"), comes_off)
+
+    def test_a_name_in_all_capitals_is_refused(self):
+        for name in ("JOHN", "A", "MCCOY"):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [f"{name!r} {self.RULE}"], name)
+
+    def test_a_name_with_a_capital_inside_passes(self):
+        for name in ("McCoy", "MacLeod", "LeBlanc", "DeShawn"):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [], name)
+
+    def test_a_name_is_counted_in_its_plain_letters(self):
+        # the accent written as its own mark makes ten characters, and still nine letters;
+        # a mark comes off whether it is drawn over a letter, under it (a cedilla, a comma),
+        # through it (a stroke) or at its upper right (the horn, as in Vietnamese)
+        for name in ("Zo\u00eb", "Ren\u00e9e", "\u00c9lisabeth", "E\u0301lisabeth",
+                     "Fran\u00e7ois", "\u015etefan", "\u0218tefan", "D\u01b0\u01a1ng", "Ma\u0335x"):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [], name)
+        ten = "\u00c9lisabeths"
+        self.assertEqual(wording.check_riddles({ten: [self.RIDDLE_OK]}), [f"{ten!r} {self.RULE}"])
+
+    def test_a_name_with_letters_that_have_no_plain_form_is_refused(self):
+        for name, odd in (("\u03a3\u03bf\u03c6\u03af\u03b1", "\u03a3"), ("S\u00f8ren", "\u00f8"), ("Stra\u00dfe", "\u00df")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], name)
+
+    def test_the_refusal_of_a_name_names_the_character_as_written(self):
+        # Unicode splits each of the first three in two, and the refusal names what was written, not a part
+        # of it; the last is written in two, and the refusal names the letter, not the two joined
+        for name, odd in (("\u0386nna", "\u0386"), ("\u0419van", "\u0419"), ("\uac00ra", "\uac00"),
+                          ("\u0391\u0301nna", "\u0391")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], ascii(name))
+        # an accent written apart from its letter is not named when the name breaks the rule another way
+        ten = "E\u0301lisabeths"
+        self.assertEqual(wording.check_riddles({ten: [self.RIDDLE_OK]}), [self.refusal(ten)])
+
+    def test_two_names_that_are_one_in_plain_letters_are_refused(self):
+        self.assertEqual(wording.check_riddles({"Zoe": ["the first riddle"], "Zo\u00eb": ["the second riddle"]}),
+                         ["'Zo\u00eb' and 'Zoe' are one name in plain letters"])
+        self.assertEqual(wording.check_riddles({"McCoy": ["the first riddle"], "Mccoy": ["the second riddle"]}),
+                         ["'Mccoy' and 'McCoy' are one name in plain letters"])
+        self.assertEqual(wording.check_riddles({"Zoe": ["the first riddle"], "Zak": ["the second riddle"]}), [])
+
+    def test_the_refusal_names_the_first_character_that_is_not_a_letter_a_to_z(self):
+        self.assertEqual(wording.check_riddles({"S\u00f8ren": [self.RIDDLE_OK]}),
+                         [f"'S\u00f8ren' {self.RULE}: '\u00f8' (U+00F8) is not a letter A to Z"])
+        self.assertEqual(wording.check_riddles({"Mary-Kate": [self.RIDDLE_OK]}),
+                         [f"'Mary-Kate' {self.RULE}: '-' (U+002D) is not a letter A to Z"])
+        self.assertEqual(wording.check_riddles({"To\u200bm": [self.RIDDLE_OK]}),
+                         [f"'To\\u200bm' {self.RULE}: '\\u200b' (U+200B) is not a letter A to Z"])
+
+    def test_a_name_with_a_digit_a_sign_or_a_space_is_refused(self):
+        for name, odd in (("Jo3", "3"), ("Jo_e", "_"), ("Mary-Kate", "-"), ("Jo Ann", " "), ("O'Neil", "'"),
+                          ("Tom ", " "), (" Tom", " "), ("Tom\n", "\n"), ("Tom\t", "\t")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], name)
+
+    def test_a_name_with_a_hidden_character_is_refused(self):
+        for name, odd in (("To\u200bm", "\u200b"), ("Tom\u202e", "\u202e"), ("To\u034fm", "\u034f"),
+                          ("Tom\ufe0f", "\ufe0f")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], repr(name))
+
+    def test_a_name_in_other_forms_of_letters_is_refused(self):
+        # full width, a trade mark sign, a numero sign, circled letters, a Roman numeral, a ligature
+        for name, odd in (("\uff2a\uff4f\uff48\uff4e", "\uff2a"), ("Jo\u2122", "\u2122"),
+                          ("\u2116ah", "\u2116"), ("\u24c9\u24de\u24dc", "\u24c9"),
+                          ("\u216cily", "\u216c"), ("So\ufb01e", "\ufb01")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], name)
+
+    def test_accents_come_off_by_tables_every_python_holds_alike(self):
+        # U+1DC4 is a mark Unicode added after 3.2, whose tables every Python holds: it stays on, everywhere
+        name = "To\u1dc4m"
+        self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, "\u1dc4")])
+
+    def test_a_name_with_an_enclosing_or_spacing_mark_is_refused(self):
+        # an enclosing circle, and a vowel sign that takes up room beside its letter (as in Hindi):
+        # neither has a combining class, so neither comes off
+        for name, odd in (("To\u20ddm", "\u20dd"), ("To\u093em", "\u093e")):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal(name, odd)], ascii(name))
+
+    def test_a_name_of_nothing_or_of_marks_alone_is_refused(self):
+        self.assertEqual(wording.check_riddles({"": [self.RIDDLE_OK]}), [self.refusal("")])
+        for name in ("\u0301", "\u0301\u0308"):
+            self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}), [self.refusal_for_a_mark(name, "0301")],
+                             ascii(name))
+
+    def test_a_name_that_breaks_the_rule_is_still_checked_against_the_others(self):
+        self.assertEqual(wording.check_riddles({"Zoe": ["the first riddle"], "ZO\u00cb": ["the second riddle"]}),
+                         [self.refusal("ZO\u00cb"), "'ZO\u00cb' and 'Zoe' are one name in plain letters"])
+
+    def test_a_name_without_a_list_of_riddles_still_counts_as_a_name(self):
+        self.assertEqual(wording.check_riddles({"Zoe": "the first riddle", "Zo\u00eb": ["the second riddle"]}),
+                         ["Zoe needs a list with at least one riddle",
+                          "'Zo\u00eb' and 'Zoe' are one name in plain letters"])
+
+    def test_the_riddle_table_states_the_name_rule_the_checker_holds(self):
+        path = Path(wording.__file__).with_name("riddles.json")
+        notes = " ".join(json.loads(path.read_text(encoding="utf-8"))["_rules"])
+        rule = wording.check_riddles({"tom": ["x"]})[0].split(" must be ", 1)[1]
+        self.assertIn(rule, notes)
 
     def test_a_name_needs_a_list_even_for_one_riddle(self):
         self.assertEqual(wording.check_riddles({"Tom": "the cat who chases Jerry"}),
@@ -832,6 +1033,8 @@ class Wording(unittest.TestCase):
     def test_a_name_inside_a_longer_word_gives_nothing_away(self):
         self.assertEqual(wording.check_riddles({"Ken": ["the colonel of Kentucky Fried Chicken"]}), [])
         self.assertEqual(wording.check_riddles({"Tom": ["the town of Toms River", "the tomcat on the fence"]}), [])
+        # a letter with no plain form is still a letter of its word
+        self.assertEqual(wording.check_riddles({"Micha": ["the town of Micha\u0142owo"]}), [])
 
     def test_an_empty_riddle_is_reported(self):
         self.assertEqual(wording.check_riddles({"Tom": [""]}), ["Tom: '' is not a riddle"])
@@ -852,6 +1055,69 @@ class Wording(unittest.TestCase):
             self.assertEqual(len(problems), 1, line)
             self.assertIn("outer spaces or full stop", problems[0])
 
+    def test_a_riddle_with_a_character_that_cannot_go_on_a_page_is_refused(self):
+        # a control (six of them), a format (three), a surrogate, a private use, a line and a paragraph separator
+        for code in (0x09, 0x0A, 0x0D, 0x00, 0x7F, 0x85, 0x200B, 0x00AD, 0x202E, 0xD800, 0xE000, 0x2028, 0x2029):
+            line = "the cat who" + chr(code) + "chases Jerry"
+            self.assertEqual(wording.check_riddles({"Tom": [line]}),
+                             [f"Tom: {line!r} holds U+{code:04X}, {self.PAGE}"], hex(code))
+
+    def test_only_the_first_such_character_is_named(self):
+        line = "the cat\nwho\tchases Jerry"                # the first, U+000A, and not the lowest, U+0009
+        self.assertEqual(wording.check_riddles({"Tom": [line]}), [f"Tom: {line!r} holds U+000A, {self.PAGE}"])
+        line = "the cat\u034fwho\nnaps"                    # the first, U+034F, though U+000A is of the six kinds
+        self.assertEqual(wording.check_riddles({"Tom": [line]}), [f"Tom: {line!r} holds U+034F, {self.PAGE}"])
+
+    def test_every_character_unicode_draws_as_nothing_is_refused_in_a_riddle(self):
+        for low, high in self.IGNORABLE:
+            for code in range(low, high + 1):
+                line = "the cat who" + chr(code) + "chases Jerry"
+                self.assertEqual(wording.check_riddles({"Tom": [line]}),
+                                 [f"Tom: {line!r} holds U+{code:04X}, {self.PAGE}"], hex(code))
+
+    def test_the_characters_beside_those_may_go_on_a_page(self):
+        # one before and one after each range of IGNORABLE, unless another rule refuses that one
+        for code in (0x00AC, 0x00AE, 0x034E, 0x0350, 0x061B, 0x061D, 0x115E, 0x1161, 0x17B3, 0x17B6, 0x180A, 0x1810,
+                     0x200A, 0x2010, 0x202F, 0x205F, 0x2070, 0x3163, 0x3165, 0xFDFF, 0xFE10, 0xFEFE, 0xFF00,
+                     0xFF9F, 0xFFA1, 0xFFEF, 0x1BC9F, 0x1BCA4, 0x1D172, 0x1D17B, 0xDFFFF, 0xE1000):
+            line = "the cat who" + chr(code) + "chases Jerry"
+            self.assertEqual(wording.check_riddles({"Tom": [line]}), [], hex(code))
+
+    def test_a_hidden_character_is_found_in_any_of_a_names_riddles(self):
+        lines = ["the cat who chases Jerry", "the cat who\u200bnaps", "the grey cat"]
+        self.assertEqual(wording.check_riddles({"Tom": lines}), [f"Tom: {lines[1]!r} holds U+200B, {self.PAGE}"])
+
+    def test_every_problem_with_a_riddle_is_reported(self):
+        line = " the cat called Tom\u200b"
+        self.assertEqual(wording.check_riddles({"Tom": [line]}),
+                         [f"Tom: {line!r} should have no outer spaces or full stop",
+                          f"Tom: {line!r} holds U+200B, {self.PAGE}", f"Tom: {line!r} gives the name away"])
+
+    def test_a_hidden_character_at_either_end_of_a_riddle_is_named_too(self):
+        for line, code in (("the cat who chases Jerry\n", 0x000A), ("\tthe cat who chases Jerry", 0x0009)):
+            self.assertEqual(wording.check_riddles({"Tom": [line]}),
+                             [f"Tom: {line!r} should have no outer spaces or full stop",
+                              f"Tom: {line!r} holds U+{code:04X}, {self.PAGE}"], line)
+
+    def test_a_riddle_may_hold_accents_written_either_way(self):
+        self.assertEqual(wording.check_riddles({"Tom": ["the cat in the caf\u00e9", "the cat by the cafe\u0301"]}), [])
+
+    def test_a_riddle_may_hold_a_character_unicode_has_not_assigned(self):
+        self.assertEqual(unicodedata.category("\u0378"), "Cn")     # unassigned, and not one Unicode draws as nothing
+        self.assertEqual(wording.check_riddles({"Tom": ["the cat who\u0378chases Jerry"]}), [])
+
+    def test_a_zero_width_space_cannot_hide_the_name(self):
+        line = "the cat called To\u200bm"                # reads as Tom; the give-away check sees To and m
+        self.assertEqual(wording.check_riddles({"Tom": [line]}), [f"Tom: {line!r} holds U+200B, {self.PAGE}"])
+
+    def test_a_riddle_of_nothing_but_a_zero_width_space_is_refused(self):
+        self.assertEqual(wording.check_riddles({"Tom": ["\u200b"]}), [f"Tom: '\\u200b' holds U+200B, {self.PAGE}"])
+
+    def test_markup_ampersands_and_spaces_are_left_to_the_page(self):
+        lines = ["the duo Simon & Garfunkel", "the singer in <b>bold</b>", "the singer of Rock &amp; Roll",
+                 "the cat who\u00a0chases Jerry"]
+        self.assertEqual(wording.check_riddles({"Sue": lines}), [])
+
     def test_a_riddle_file_of_ones_own_is_read(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "mine.json")
@@ -864,6 +1130,15 @@ class Wording(unittest.TestCase):
             path = Path(folder, "mine.json")
             path.write_bytes(json.dumps(table, ensure_ascii=False).encode("utf-8"))
             self.assertEqual(wording.load_riddles(path), table)
+
+    def test_a_riddle_file_with_a_line_break_in_a_riddle_is_refused(self):
+        line = "the cat who\nchases Jerry"
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            path.write_text('{"Tom": ["the cat who\\nchases Jerry"]}', encoding="utf-8")
+            with self.assertRaises(ValueError) as refused:
+                wording.load_riddles(path)
+            self.assertEqual(str(refused.exception), f"mine.json: Tom: {line!r} holds U+000A, {self.PAGE}")
 
     def test_a_name_listed_twice_in_a_file_is_refused(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -887,7 +1162,7 @@ class Wording(unittest.TestCase):
                 "mine.json: Jill is listed twice; Jack is listed twice",
             # and another fault in the file does not hide it
             '{"Jack": ["the lad with the beanstalk"], "Jack": ["the giant killer"], "jill": ["the girl on the hill"]}':
-                "mine.json: Jack is listed twice; 'jill' must be one capitalised word of at most 9 letters",
+                f"mine.json: Jack is listed twice; 'jill' {self.RULE}",
         }
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "mine.json")
