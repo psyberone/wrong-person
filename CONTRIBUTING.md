@@ -307,9 +307,15 @@ For the maintainer:
 - **The reviewers are AI agents.** Each works in its own copy of the exact
   commit, and none of them wrote the change. Their findings are graded, and the
   pull request records what was found and what was done about it.
-- After a fix, the same reviewers answer a closed question: is each finding
-  fixed, and did the fix break anything. It is not a new hunt.
+- One reviewer for each gate stays with the change until it merges. After a
+  fix, only the reviewers whose gate has not passed yet look at it, and only at
+  the findings it says it fixes and at what the fix itself changed, not at the
+  whole change again. Once every gate has passed, or all that is left is one
+  small point for the owner to decide, each reviewer whose gate passed earlier
+  reads the commits made since then, and only those.
 - The owner merges, and only once the review is clear.
+- [REVIEW.md](REVIEW.md) says what the reviewers look for in this project in
+  particular, and lists every way data comes in and goes out.
 
 ## The private word list
 
