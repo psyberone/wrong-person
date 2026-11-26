@@ -870,9 +870,14 @@ class Wording(unittest.TestCase):
         comes_off = {point for point in range(0x110000) if unicodedata.ucd_3_2_0.combining(chr(point))}
         comes_off |= {0x0F73, 0x0F75, 0x0F81}
         self.assertEqual(len(comes_off), 330)
+        hidden = "the c\u200bat"
         for point in sorted(comes_off):
-            # whatever else is wrong with the name, or with its riddles, the mark that comes first is named
-            for rest in ("Tom", "\u0301Tom", "TOM", "tom", "Abcdefghij", " Tom", "T0m", "S\u00f8ren", ""):
+            # after each mark the test tries an example of each reason the name rule gives, a tab and a hidden
+            # character; riddles that are missing or not a list; and a table where a refused twin comes first and
+            # the riddles hold each problem the check reports for a riddle. Whichever of these is also wrong, the
+            # mark that comes first is named
+            for rest in ("Tom", "\u0301Tom", "TOM", "tom", "Abcdefghij", " Tom", "T0m", "S\u00f8ren", "",
+                         "Tom\t", "To\u200bm"):
                 name = chr(point) + rest
                 self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}),
                                  [self.refusal_for_a_mark(name, f"{point:04X}")], ascii(name))
@@ -881,6 +886,18 @@ class Wording(unittest.TestCase):
                 self.assertEqual(wording.check_riddles({name: lines}),
                                  [self.refusal_for_a_mark(name, f"{point:04X}"),
                                   f"{name} needs a list with at least one riddle"], ascii(name))
+            table = {"tom": [self.RIDDLE_OK],
+                     name: [self.RIDDLE_OK, "", 5, "the dog.", "the dog.", "Tom ran", hidden]}
+            self.assertEqual(wording.check_riddles(table),
+                             [self.refusal("tom"), self.refusal_for_a_mark(name, f"{point:04X}"),
+                              f"{name!r} and 'tom' are one name in plain letters",
+                              f"{self.RIDDLE_OK!r} is under both tom and {name}",
+                              f"{name}: '' is not a riddle", f"{name}: 5 is not a riddle",
+                              f"{name}: 'the dog.' should have no outer spaces or full stop",
+                              f"{name}: 'the dog.' is listed twice",
+                              f"{name}: 'the dog.' should have no outer spaces or full stop",
+                              f"{name}: 'Tom ran' gives the name away",
+                              f"{name}: {hidden!r} holds U+200B, a character that cannot go on a page"], ascii(name))
 
         def get_the_ending(rest):
             return {point for point in range(0x110000)

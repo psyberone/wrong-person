@@ -123,10 +123,22 @@ E228 to E232 came from the ninth re-check, and carry the tag `u7r10`. They are
 five changes that tie the ending to the rest of the name, or to its riddles,
 which the AI reviewers found passing every test: the ending only when the name
 has at most 9 letters, is not all capitals, has no small letter first, has no
-space after the mark, or has its riddles in a list. The owner chose to try every
-way a name can be refused after each mark that comes off whole, so each is
+space after the mark, or has its riddles in a list. The owner chose wider cases:
+after each mark that comes off whole, the test tries an example of each reason
+the name rule gives, and riddles that are missing or not a list, so each is
 killed by that test. E221's label no longer gives a count: it is eleven on
 newer Pythons and ten on 3.10.
+
+E233 to E247 came from the tenth re-check, and carry the tag `u7r11`. They are
+fifteen more conditions on the same ending, which the AI reviewers found passing
+every test: the ending kept only when the name holds no tab, line break or
+character that cannot go on a page; when it is the first name in the table, no
+earlier name was refused, or none is the same in plain letters; or when its
+riddles are all text, are at most one, or have none of the problems the check
+reports for a riddle. The owner chose to close them: after each mark the test
+now also tries a tab and a hidden character in the name, and a table where a
+refused twin comes first and the riddles hold each problem the check reports
+for a riddle, so each is killed by that test.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -932,4 +944,50 @@ FAULTS = [
     ("E232 [u7r10] a leading mark gets the ending only when no space follows it, and the space is named instead",
      "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
      [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and name[1:2] != " ":')]),
+    # ---- from the tenth re-check
+    ("E233 [u7r11] a leading mark gets the ending only when the name is printable, so a tab or hidden character after it takes it away",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and name.isprintable():')]),
+    ("E234 [u7r11] a leading mark gets the ending only when no earlier name is the same in plain letters",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and plain.lower() not in plain_names:')]),
+    ("E235 [u7r11] a leading mark gets the ending only when nothing earlier in the table was refused",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not problems:')]),
+    ("E236 [u7r11] a leading mark gets the ending only when no riddle in its list is blank or not text",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and any(not isinstance(line, str) or not line.strip() for line in lines)):')]),
+    ("E237 [u7r11] a leading mark loses the ending when a later character that cannot go on a page is named instead",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and (odd is None or _unprinted(odd) is None):')]),
+    ("E238 [u7r11] a leading mark gets the ending only when nothing in the name cannot go on a page",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and _unprinted(name) is None:')]),
+    ("E239 [u7r11] a leading mark gets the ending only when every riddle in its list is text",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and any(not isinstance(line, str) for line in lines)):')]),
+    ("E240 [u7r11] a leading mark gets the ending only when its list holds at most one riddle",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and len(lines) > 1):')]),
+    ("E241 [u7r11] a leading mark gets the ending only when no tab or line break is in the name",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not any(char in name for char in "\\t\\n\\r"):')]),
+    ("E242 [u7r11] a leading mark gets the ending only when its name is the first in the table",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not plain_names:')]),
+    ("E243 [u7r11] a leading mark loses the ending when a riddle has a space at either end or a full stop",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', "if name and not _plain(name[0]) and not (isinstance(lines, list) and any(isinstance(x, str) and (x != x.strip() or x.endswith('.')) for x in lines)):")]),
+    ("E244 [u7r11] a leading mark loses the ending when a riddle is said twice under the name",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and len({str(x).lower() for x in lines}) < len(lines)):')]),
+    ("E245 [u7r11] a leading mark loses the ending when a riddle gives the name away",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and any(isinstance(x, str) and _gives_away(name, x) for x in lines)):')]),
+    ("E246 [u7r11] a leading mark loses the ending when a riddle holds a character that cannot go on a page",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not (isinstance(lines, list) and any(isinstance(x, str) and _unprinted(x) is not None for x in lines)):')]),
+    ("E247 [u7r11] a leading mark loses the ending when a riddle is under an earlier name too",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', "if name and not _plain(name[0]) and not (isinstance(lines, list) and any(isinstance(x, str) and ' '.join(x.lower().split()) in seen for x in lines)):")]),
 ]
