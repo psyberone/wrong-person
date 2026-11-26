@@ -34,7 +34,10 @@ by a doubled slash, and passed over a span that ran onto the next line and a
 name written without its module; and that the contributing page ran mutmut on a
 copy left over from an earlier run. RV09 to RV19 and RV22 are the AI coding
 assistant's, the first eleven planted in tests/test_review.py against its own
-fixes, for the reason above.
+fixes, for the reason above. A second round found that asking for each Python
+file at the top of the repository turned the test red in a reader's folder that
+holds the example.py the README tells them to save there, so that rule went,
+and RV12 now plants it back.
 RV20 and RV21 are faults the reviewers planted that no test caught then. Two
 more of theirs, P01 and P02, add a new tool in a new folder under tools/ and a
 new folder of the package; the script adds a file only to a folder that is
@@ -1053,9 +1056,11 @@ FAULTS = [
     ("RV11 [u8r] a file in a __pycache__ folder must be named",
      "test_review.ReviewPage.test_a_file_left_off_the_page_is_caught",
      [(RT, '    return name.startswith(".") or name == "__pycache__"\n', '    return name.startswith(".")\n')]),
-    ("RV12 [u8r] a Python file at the top of the repository need not be named",
+    ("RV12 [u8r] the page's test asks for each Python file at the top of the repository too, the README's example.py among them",
      "test_review.ReviewPage.test_a_file_left_off_the_page_is_caught",
-     [(RT, '    named |= {path.name for path in root.glob("*.py") if path.is_file() and not hidden(path.name)}\n', "")]),
+     [(RT, '    named |= {".github/workflows/" + path.name',
+       '    named |= {path.name for path in root.glob("*.py") if path.is_file() and not hidden(path.name)}\n'
+       '    named |= {".github/workflows/" + path.name')]),
     ("RV13 [u8r] any file in the folder of workflows must be named, not only a workflow",
      "test_review.ReviewPage.test_a_file_left_off_the_page_is_caught",
      [(RT, ' and path.name.endswith((".yml", ".yaml"))', "")]),

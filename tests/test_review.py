@@ -4,11 +4,12 @@ A list like that falls behind without anyone seeing it, so it is held here.
 
 Every file the page names must be there. These must be named: each Python or
 JSON file in the package, at any depth; each Python file in tools/, at any
-depth, outside the folder of fault lists; each Python file at the top of the
-repository; each workflow, a .yml or .yaml file directly in .github/workflows/;
-and the folder of fault lists itself, tools/faults/. A file or folder whose name
-starts with a dot, and a __pycache__ folder, do not count, and no other folder
-is looked in. Every name of the package that the page gives must be in it.
+depth, outside the folder of fault lists; each workflow, a .yml or .yaml file
+directly in .github/workflows/; and the folder of fault lists itself,
+tools/faults/. A file or folder whose name starts with a dot, and a __pycache__
+folder, do not count. No other folder is looked in, nor are the files at the
+top of the repository, where the README tells a reader to save an example.py.
+Every name of the package that the page gives must be in it.
 
 What is read is only what the page writes in backticks. A span may run onto the
 next line, as Markdown allows; the line break reads as a space. Each span must
@@ -109,13 +110,12 @@ def to_be_named(root, package):
     """Every file that can take data in or send it out, by the name the page must give it.
 
     Each Python file and each JSON file of the package, at any depth, found in `package`. Under `root`: each Python file
-    in tools/, at any depth, outside tools/faults/; each Python file at the top of the repository; each workflow, a .yml
-    or .yaml file directly in .github/workflows/; and the folder of fault lists, tools/faults/, when it is there. What
-    `hidden` names does not count, and no other folder is looked in.
+    in tools/, at any depth, outside tools/faults/; each workflow, a .yml or .yaml file directly in .github/workflows/;
+    and the folder of fault lists, tools/faults/, when it is there. What `hidden` names does not count. No other folder
+    is looked in, nor are the files at the top of `root`.
     """
     named = {IN_THE_PACKAGE + name for name in files_in(package) if name.endswith((".py", ".json"))}
     named |= {"tools/" + name for name in files_in(root / "tools") if name.endswith(".py") and not name.startswith("faults/")}
-    named |= {path.name for path in root.glob("*.py") if path.is_file() and not hidden(path.name)}
     named |= {".github/workflows/" + path.name for path in (root / ".github" / "workflows").glob("*")
               if path.is_file() and not hidden(path.name) and path.name.endswith((".yml", ".yaml"))}
     if (root / "tools" / "faults").is_dir():
@@ -205,21 +205,22 @@ class ReviewPage(unittest.TestCase):
                 (folder / name).write_text("", encoding="utf-8")
             self.assertEqual(unlisted("`src/wrong_person/engine.py` `tools/faults/` `tools/new.py`", folder, package),
                              [".github/workflows/new.yaml", "src/wrong_person/new.json"])
-            # Below the top of the package and of tools/, and at the top of the repository, a file must be named as well.
+            # Below the top of the package and of tools/, a file must be named as well.
             deeper = ("tools/lib/fetch.py", "src/wrong_person/formats/__init__.py", "src/wrong_person/formats/load.py",
-                      "src/wrong_person/locale/fr.json", "make_pages.py", "conftest.py")
+                      "src/wrong_person/locale/fr.json")
             # Not these: a name or a folder that starts with a dot, a __pycache__ folder, a workflow that does not end in .yml or
-            # .yaml or is not directly in its folder, anything under tools/faults/, and a folder at the top that is not tools/.
+            # .yaml or is not directly in its folder, anything under tools/faults/, a folder at the top that is not tools/, and
+            # a file at the top of the repository, such as the example.py that the README tells a reader to save there.
             passed_over = ("tools/.#planted_faults.py", "src/wrong_person/._engine.py", "tools/.cache/old.py", ".hidden.py",
                            "src/wrong_person/__pycache__/engine.py", "tools/__pycache__/fetch.py", ".github/workflows/.DS_Store",
                            ".github/workflows/checks.yml.orig", ".github/workflows/old/checks.yml", "tools/faults/more/new.py",
-                           "scripts/render.py")
+                           "scripts/render.py", "example.py", "make_pages.py", "conftest.py")
             for name in deeper + passed_over:
                 (folder / name).parent.mkdir(parents=True, exist_ok=True)
                 (folder / name).write_text("", encoding="utf-8")
             named = "`src/wrong_person/engine.py` `tools/faults/` `tools/new.py` `.github/workflows/new.yaml` `src/wrong_person/new.json`"
             self.assertEqual(unlisted(named, folder, package),
-                             ["conftest.py", "make_pages.py", "src/wrong_person/formats/__init__.py", "src/wrong_person/formats/load.py",
+                             ["src/wrong_person/formats/__init__.py", "src/wrong_person/formats/load.py",
                               "src/wrong_person/locale/fr.json", "tools/lib/fetch.py"])
 
     def test_every_function_the_page_names_is_in_the_package(self):
