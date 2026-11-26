@@ -16,9 +16,11 @@ a pull request from a fork.
 ## What a change is judged against
 
 The issue it closes, and the plan the owner approved for it. The plan is kept
-outside the repository, so the pull request says what the change builds. Like
-every change, it is also judged against the promises in `README.md`: computer
-generated, not AI generated; proved solvable; AI use said plainly.
+outside the repository, so the pull request says what the change builds. A
+change from outside the project has no such plan, and is judged against its
+issue and its pull request's description. Like every change, it is also judged
+against the promises in `README.md`: computer generated, not AI generated;
+proved solvable; AI use said plainly.
 
 ## What a reviewer must see
 
@@ -32,7 +34,10 @@ Beyond reading the change itself:
 - the tests passing on every Python version that the `tests` job runs.
 
 A check whose result a reviewer can neither see on GitHub nor get by running it
-counts as not passed.
+counts as not passed. On a pull request from a fork, the `private-words` job is
+given no secret, so it searches for nothing, says it was skipped, and passes.
+There the check counts as not passed until the owner has run `main`'s copy of
+the scan on the change by hand, as `CONTRIBUTING.md` says.
 
 ## The planted faults
 
@@ -74,7 +79,9 @@ about the package; the rest is `src/wrong_person/engine.py`,
 
 Comes in, from the program that calls it:
 
-- names and a shape for a board: `engine.Board`;
+- names and a shape for a board: `engine.Board`, which takes one piece of text
+  in place of a list as its names, one letter each
+  ([#37](https://github.com/psyberone/wrong-person/issues/37));
 - rules: `engine.Rule`, and a rule saved as a list: `engine.Rule.from_list`;
 - the letter sets and the named people that clues may use: `engine.rule_space`;
 - a saved case, which may have been saved by an earlier version:
@@ -83,27 +90,40 @@ Comes in, from the program that calls it:
   or one the caller names, which may have been written for an earlier version:
   `wording.load_riddles`;
 - a riddle table already in memory: `wording.check_riddles`;
-- riddle text: `wording.sentence` and `wording.arrest`.
+- riddle text: `wording.sentence` and `wording.arrest`;
+- letters, names and numbers given straight to four helpers that are public too:
+  `wording.letters`, `engine.matches`, `engine.Board.index` and
+  `engine.Board.cells`.
 
-What is wrong in what these are given is refused with a `ValueError` that says
-what is wrong, or, for a riddle table in memory, listed by `wording.check_riddles`.
-Something of the wrong kind altogether, such as a number where a list of names
-belongs, can meet one of Python's own errors instead, and a riddle file that
-cannot be opened raises Python's `OSError`. The engine's other functions that take
-a board or rules, such as `engine.survivors` and `engine.audit`, take them as the
-calls above made them and do not check them again.
+Apart from those four helpers, what is wrong in what these are given is refused
+with a `ValueError` that says what is wrong, or, for a riddle table in memory,
+listed by `wording.check_riddles`. Something of the wrong kind altogether, such
+as a number where a list of names belongs, can meet one of Python's own errors
+instead, and a riddle file that cannot be opened raises Python's `OSError`. The
+four helpers check little, and much of what they cannot use meets one of
+Python's own errors
+([#37](https://github.com/psyberone/wrong-person/issues/37)). The engine's
+other functions that take a board or rules, such as `engine.survivors` and
+`engine.audit`, take them as the calls above made them and do not check them
+again. Two of them, `engine.holds` and `engine.decoys`, also take a suspect's
+number, and do not check that either.
 
 Goes out, to the program that calls it:
 
 - text for a printed page, from `wording.sentence` and `wording.arrest`, and the
   fixed lines `wording.NOTE` and `wording.RULES_TEXT`. A riddle holding a
   character that cannot go on a page is refused, and `wording.sentence`, which is
-  told the name, also refuses a riddle that gives the name away;
+  told the name, also refuses a riddle that gives the name away. The letters in a
+  clue and the names on a board can hold characters that print as nothing, which
+  the package does not refuse
+  ([#41](https://github.com/psyberone/wrong-person/issues/41));
 - a case as JSON text, in plain ASCII: `engine.case_to_json`;
-- error messages, which quote what they refuse. Most quote it in Python's own
-  form, in quotes and with hidden characters written as escapes. A riddle table's
-  problems also give each person's name as it is written, and
-  `wording.load_riddles` begins its message with the file's name.
+- error messages, which can quote what they refuse. Most quote it in Python's
+  own form, in quotes and with control and format characters written as escapes;
+  some other characters that print as nothing are left as they are. A riddle
+  table's problems also give each person's name as it is written, and
+  `wording.load_riddles` begins its message with the file's name
+  ([#38](https://github.com/psyberone/wrong-person/issues/38)).
 
 ### The tools, `tools/`
 
@@ -115,8 +135,8 @@ a terminal, or on GitHub to the run's log.
 - In: its arguments; the lists in `tools/faults/`, which are Python files that it
   runs; git's list of the repository's files, and the files themselves, which it
   copies; the environment, which it hands on to git and to the Python it starts,
-  without git's own variables; and `PLANTED_FAULTS_DEPTH`, which it reads, and
-  sets for what it starts.
+  without the variables that point git at one repository; and
+  `PLANTED_FAULTS_DEPTH`, which it reads, and sets for what it starts.
 - Out: it writes only in a temporary folder of its own, which it removes when it
   ends. It prints labels and the names of tests and files, never the text of an
   edit. A name from the disk or the command line is printed as it stands only if
@@ -132,8 +152,9 @@ a terminal, or on GitHub to the run's log.
   description and branch name, which anyone who opens a pull request can write;
   and, through git, every tracked file and its name, every commit's authors and
   message, and every version of every file and folder name that the history
-  keeps. It reads no arguments and scans the repository it is started in. It
-  hands git the environment without the pattern.
+  keeps; and git's grafts file, which it opens itself, where git says it is, to
+  see whether it holds anything. It reads no arguments and scans the repository
+  it is started in. It hands git the environment without the pattern.
 - Out: how many things it looked at and where a match is, never what matched. A
   name it prints is in quotes on one line, with `##[` broken up. For a pull
   request from a fork it prints a notice for GitHub that the scan was skipped. It
