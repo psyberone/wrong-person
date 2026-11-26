@@ -1,4 +1,4 @@
-"""Planted faults in the checks themselves: the scan and the mutation floor under tools/, the workflow, the settings and the contributing page.
+"""Planted faults in the checks themselves: the scan and the mutation floor under tools/, the workflow, the settings, the contributing page, and the page for the reviewers with its tests.
 
 Each entry is a label, the full name of the one test meant to catch the fault,
 and the edits that plant it: (file, the text to replace, what replaces it; None
@@ -20,11 +20,19 @@ this list does not record which. Where several tests fail for a fault, the test
 named is the one that fails for the fewest faults. Where the name of another
 failing test says what the fault breaks, that test was chosen by hand instead.
 
+RV01 to RV08 came with REVIEW.md, the page that tells the reviewers how this
+project is reviewed and lists every way data comes in and goes out (#36). They
+carry the tag `u8` for the work unit. The AI coding assistant planted them
+against its own change. RV08 is planted in a test file, tests/test_review.py,
+because the helpers there are the check: they decide which names on the page
+are missing, so a fault in them is a fault in the check itself.
+
 Three faults from those reviews are not here, because no single test can be
 named for them. CONTRIBUTING.md tells what became of each.
 """
 
 PW, MF, WF, PY, CO = "tools/private_words.py", "tools/mutation_floor.py", ".github/workflows/checks.yml", "pyproject.toml", "CONTRIBUTING.md"
+RP, RT = "REVIEW.md", "tests/test_review.py"
 BS = chr(92)
 CATCH = "    except (re.error, RecursionError, OverflowError, ValueError, Warning):"
 NOT_VALID = '        raise CannotVouch("the private pattern is not a valid pattern") from None'
@@ -996,4 +1004,29 @@ FAULTS = [
     ("L18 [P7] the page installs the wheel with what else it needs from the network",
      "test_workflow.Floors.test_the_page_gives_the_package_jobs_own_commands_for_a_contributor_to_run",
      [(CO, "--no-index --no-deps ", "")]),
+    # ---- REVIEW.md, the page for the reviewers, and the tests that keep it true (u8)
+    ("RV01 [u8] the page names the mutation floor's script by a name that is not there",
+     "test_review.ReviewPage.test_every_file_the_page_names_is_in_the_repository",
+     [(RP, "`tools/mutation_floor.py`", "`tools/mutation-floor.py`")]),
+    ("RV02 [u8] the page leaves out the scan for the private words",
+     "test_review.ReviewPage.test_every_file_that_takes_data_in_or_out_is_named",
+     [(RP, "`tools/private_words.py` looks for the private words.", "The scan looks for the private words.")]),
+    ("RV03 [u8] a new tool comes in and the page does not name it",
+     "test_review.ReviewPage.test_every_file_that_takes_data_in_or_out_is_named",
+     [("tools/extra.py", None, '"""A tool that the page for the reviewers does not name."""\n')]),
+    ("RV04 [u8] the page names a function the package does not have",
+     "test_review.ReviewPage.test_every_function_the_page_names_is_in_the_package",
+     [(RP, "`engine.case_from_json`", "`engine.case_from_text`")]),
+    ("RV05 [u8] the contributing page no longer points to the page for the reviewers",
+     "test_review.ReviewPage.test_the_contributing_page_points_here",
+     [(CO, "[REVIEW.md](REVIEW.md)", "REVIEW.md")]),
+    ("RV06 [u8] mutmut does not copy the page, so its test cannot find it there",
+     "test_workflow.Floors.test_the_tests_that_read_these_files_can_find_them_wherever_they_are_run",
+     [(PY, '    "REVIEW.md",         # tests/test_review.py reads the page\n', "")]),
+    ("RV07 [u8] the package job does not copy the page, so its test cannot find it there",
+     "test_workflow.Workflow.test_each_job_runs_exactly_these_commands",
+     [(WF, "CONTRIBUTING.md REVIEW.md pyproject.toml", "CONTRIBUTING.md pyproject.toml")]),
+    ("RV08 [u8] the check of the files the page names reports none missing",
+     "test_review.ReviewPage.test_a_file_that_is_not_there_is_caught",
+     [(RT, "    return sorted(name for name in paths(page) if not found(name, root, package))\n", "    return []\n")]),
 ]
