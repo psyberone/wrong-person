@@ -54,10 +54,16 @@ why. The log is kept outside the repository, with the plan.
 ## Where data comes in and goes out
 
 Below is every way data comes in and goes out, with the files that do it.
-`tests/test_review.py` fails when a Python or JSON file of the package, a Python
-file in `tools/`, a workflow or the folder of fault lists is not named here, when
-a file named here is not there, and when a function named here is not in the
-package.
+`tests/test_review.py` fails when one of these is not named here: a Python or
+JSON file anywhere in the package; a Python file anywhere in `tools/`, outside
+the fault lists; a Python file at the top of the repository; a workflow, which
+is a file directly in `.github/workflows/` ending in .yml or .yaml; or the
+folder of fault lists. A file or folder whose name starts with a dot does not
+count, nor does a `__pycache__` folder, and no other folder is looked in. The
+test also fails when a file named here is not there, and when a name of the
+package given here is not in the package. It reads only what is written in
+backticks, and each of those must be a path, a name in the package written with
+its module, or one of a few plain words that the test holds.
 
 ### The package, `src/wrong_person/`
 

@@ -27,6 +27,18 @@ against its own change. RV08 is planted in a test file, tests/test_review.py,
 because the helpers there are the check: they decide which names on the page
 are missing, so a fault in them is a fault in the check itself.
 
+RV09 to RV21 came from the review of that change, and carry the tag `u8r`. The
+AI reviewers found that the page's test did not look below the top of the
+package and of tools/, counted hidden files, could be led out of the repository
+by a doubled slash, and passed over a span that ran onto the next line and a
+name written without its module. RV09 to RV19 are the AI coding assistant's,
+planted in tests/test_review.py against its own fixes, for the reason above.
+RV20 and RV21 are faults the reviewers planted that no test caught then. Two
+more of theirs, P01 and P02, add a new tool in a new folder under tools/ and a
+new folder of the package; the script adds a file only to a folder that is
+there, so they cannot be planted as written, and RV09 plants the same gap in
+the test instead.
+
 Three faults from those reviews are not here, because no single test can be
 named for them. CONTRIBUTING.md tells what became of each.
 """
@@ -1029,4 +1041,46 @@ FAULTS = [
     ("RV08 [u8] the check of the files the page names reports none missing",
      "test_review.ReviewPage.test_a_file_that_is_not_there_is_caught",
      [(RT, "    return sorted(name for name in paths(page) if not found(name, root, package))\n", "    return []\n")]),
+    # ---- the review of REVIEW.md's test (u8r)
+    ("RV09 [u8r] the page's test looks only at the top of the package and of tools/",
+     "test_review.ReviewPage.test_a_file_left_off_the_page_is_caught",
+     [(RT, "        folders[:] = [name for name in folders if not hidden(name)]\n", "        folders[:] = []\n")]),
+    ("RV10 [u8r] a file whose name starts with a dot must be named",
+     "test_review.ReviewPage.test_a_file_left_off_the_page_is_caught",
+     [(RT, '    return name.startswith(".") or name == "__pycache__"\n', '    return name == "__pycache__"\n')]),
+    ("RV11 [u8r] a file in a __pycache__ folder must be named",
+     "test_review.ReviewPage.test_a_file_left_off_the_page_is_caught",
+     [(RT, '    return name.startswith(".") or name == "__pycache__"\n', '    return name.startswith(".")\n')]),
+    ("RV12 [u8r] a Python file at the top of the repository need not be named",
+     "test_review.ReviewPage.test_a_file_left_off_the_page_is_caught",
+     [(RT, '    named |= {path.name for path in root.glob("*.py") if path.is_file() and not hidden(path.name)}\n', "")]),
+    ("RV13 [u8r] any file in the folder of workflows must be named, not only a workflow",
+     "test_review.ReviewPage.test_a_file_left_off_the_page_is_caught",
+     [(RT, ' and path.name.endswith((".yml", ".yaml"))', "")]),
+    ("RV14 [u8r] each fault list must be named one by one",
+     "test_review.ReviewPage.test_every_file_that_takes_data_in_or_out_is_named",
+     [(RT, ' and not name.startswith("faults/")', "")]),
+    ("RV15 [u8r] a doubled slash after src/wrong_person/, or a link, leads the check out of the repository",
+     "test_review.ReviewPage.test_a_file_that_is_not_there_is_caught",
+     [(RT, "    if not place.resolve().is_relative_to(base.resolve()):\n        return False\n", "")]),
+    ("RV16 [u8r] a name with .. in it is looked up",
+     "test_review.ReviewPage.test_a_file_that_is_not_there_is_caught",
+     [(RT, '    if PurePosixPath(name).is_absolute() or ".." in PurePosixPath(name).parts:\n        return False\n    base, rest',
+       "    base, rest")]),
+    ("RV17 [u8r] a span that runs onto the next line is not read, and the spans after it are paired wrongly",
+     "test_review.ReviewPage.test_a_function_the_package_lacks_is_caught",
+     [(RT, 'SPAN = re.compile(r"`([^`\\n]+(?:\\n[^`\\n]+)?)`")', 'SPAN = re.compile(r"`([^`\\n]+)`")')]),
+    ("RV18 [u8r] a span that is not a path and not written like a name of the package is passed over",
+     "test_review.ReviewPage.test_a_function_the_package_lacks_is_caught",
+     [(RT, "span not in WORDS and not in_the_package(span)", "FUNCTION.fullmatch(span) and not in_the_package(span)")]),
+    ("RV19 [u8r] the plain words the test holds are reported as well",
+     "test_review.ReviewPage.test_a_function_the_package_lacks_is_caught",
+     [(RT, "span not in WORDS and not in_the_package(span)", "not in_the_package(span)")]),
+    ("RV20 [u8r] [G3c] a span that runs onto the next line hides a file named after it that is not there",
+     "test_review.ReviewPage.test_every_file_the_page_names_is_in_the_repository",
+     [(RP, "which git ignores.\n", "which git ignores. The suite runs with `PYTHONPATH=src python3 -m unittest\ndiscover -s tests`, and "
+           "the helper in `tools/no_such_helper.py` reads it.\n")]),
+    ("RV21 [u8r] [P03] the page names a function without its module",
+     "test_review.ReviewPage.test_every_function_the_page_names_is_in_the_package",
+     [(RP, "`engine.audit`", "`audit_all`")]),
 ]
