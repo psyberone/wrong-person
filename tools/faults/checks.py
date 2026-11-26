@@ -27,12 +27,14 @@ against its own change. RV08 is planted in a test file, tests/test_review.py,
 because the helpers there are the check: they decide which names on the page
 are missing, so a fault in them is a fault in the check itself.
 
-RV09 to RV21 came from the review of that change, and carry the tag `u8r`. The
+RV09 to RV22 came from the review of that change, and carry the tag `u8r`. The
 AI reviewers found that the page's test did not look below the top of the
 package and of tools/, counted hidden files, could be led out of the repository
 by a doubled slash, and passed over a span that ran onto the next line and a
-name written without its module. RV09 to RV19 are the AI coding assistant's,
-planted in tests/test_review.py against its own fixes, for the reason above.
+name written without its module; and that the contributing page ran mutmut on a
+copy left over from an earlier run. RV09 to RV19 and RV22 are the AI coding
+assistant's, the first eleven planted in tests/test_review.py against its own
+fixes, for the reason above.
 RV20 and RV21 are faults the reviewers planted that no test caught then. Two
 more of theirs, P01 and P02, add a new tool in a new folder under tools/ and a
 new folder of the package; the script adds a file only to a folder that is
@@ -1083,4 +1085,7 @@ FAULTS = [
     ("RV21 [u8r] [P03] the page names a function without its module",
      "test_review.ReviewPage.test_every_function_the_page_names_is_in_the_package",
      [(RP, "`engine.audit`", "`audit_all`")]),
+    ("RV22 [u8r] the contributing page runs mutmut without first clearing the copy an earlier run left",
+     "test_workflow.Floors.test_the_page_gives_the_mutation_jobs_own_commands_after_clearing_mutmuts_copy",
+     [(CO, "rm -rf mutants\npython3 -m mutmut run\n", "python3 -m mutmut run\n")]),
 ]

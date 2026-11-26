@@ -62,7 +62,10 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 PYTHONPATH=src python3 -m coverage run -m unittest discover -s tests
 python3 -m coverage report
 
-# mutation, which fails under 80% killed (writes a mutants/ folder, ignored by git)
+# mutation, which fails under 80% killed: it runs the tests in a copy, the
+# mutants/ folder (git ignores it), and never takes a file out of that copy, so
+# a file you have removed would still be tested there; the rm starts it afresh
+rm -rf mutants
 python3 -m mutmut run
 python3 -m mutmut export-cicd-stats
 python3 tools/mutation_floor.py
