@@ -118,6 +118,15 @@ Unicode 3.2's or this Python's, is Mn; a mark taken when making it plain
 changes it; a character Unicode says to draw as nothing taken for a mark; and a
 byte order mark looked past. The owner chose one test that tries every
 character first in a name, so each is killed by that test.
+
+E228 to E232 came from the ninth re-check, and carry the tag `u7r10`. They are
+five changes that tie the ending to the rest of the name, or to its riddles,
+which the AI reviewers found passing every test: the ending only when the name
+has at most 9 letters, is not all capitals, has no small letter first, has no
+space after the mark, or has its riddles in a list. The owner chose to try every
+way a name can be refused after each mark that comes off whole, so each is
+killed by that test. E221's label no longer gives a count: it is eleven on
+newer Pythons and ten on 3.10.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -886,7 +895,7 @@ FAULTS = [
     ("E220 [u7r9] a leading mark gets the ending by Unicode 3.2's category Mn, so marks that stay on get it, and eight that come off do not",
      "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
      [(W, 'if name and not _plain(name[0]):', 'if name and unicodedata.ucd_3_2_0.category(name[0]) == "Mn":')]),
-    ("E221 [u7r9] only a leading mark that comes off and has this Python's category Mn gets the ending, so eleven name nothing",
+    ("E221 [u7r9] only a leading mark that comes off and has this Python's category Mn gets the ending, so some name nothing",
      "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
      [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and unicodedata.category(name[0]) == "Mn":')]),
     ("E222 [u7r9] a leading mark that changes when made plain gets the ending, so marks that split but stay on get it",
@@ -907,4 +916,20 @@ FAULTS = [
     ("E227 [u7r9] a byte order mark first is looked past, and is called a mark when one follows it",
      "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
      [(W, 'if name and not _plain(name[0]):', 'if name.lstrip("\\ufeff") and not _plain(name.lstrip("\\ufeff")[0]):')]),
+    # ---- from the ninth re-check
+    ("E228 [u7r10] a leading mark gets the ending only when the name has at most 9 letters, so a longer one names nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and len(plain) <= 9:')]),
+    ("E229 [u7r10] a leading mark gets the ending only when the name is not all capitals, so TOM after it names nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not plain.isupper():')]),
+    ("E230 [u7r10] a leading mark gets the ending only when no small letter starts the name, so tom after it names nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and not plain[:1].islower():')]),
+    ("E231 [u7r10] a leading mark gets the ending only when the riddles are a list, so a name without one names nothing",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and isinstance(lines, list):')]),
+    ("E232 [u7r10] a leading mark gets the ending only when no space follows it, and the space is named instead",
+     "test_engine.Wording.test_only_a_mark_that_comes_off_whole_gets_the_ending",
+     [(W, 'if name and not _plain(name[0]):', 'if name and not _plain(name[0]) and name[1:2] != " ":')]),
 ]

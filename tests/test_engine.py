@@ -871,9 +871,16 @@ class Wording(unittest.TestCase):
         comes_off |= {0x0F73, 0x0F75, 0x0F81}
         self.assertEqual(len(comes_off), 330)
         for point in sorted(comes_off):
-            for name in (chr(point) + "Tom", chr(point) + "\u0301Tom"):
+            # whatever else is wrong with the name, or with its riddles, the mark that comes first is named
+            for rest in ("Tom", "\u0301Tom", "TOM", "tom", "Abcdefghij", " Tom", "T0m", "S\u00f8ren", ""):
+                name = chr(point) + rest
                 self.assertEqual(wording.check_riddles({name: [self.RIDDLE_OK]}),
                                  [self.refusal_for_a_mark(name, f"{point:04X}")], ascii(name))
+            name = chr(point) + "Tom"
+            for lines in ([], "the cat", None):
+                self.assertEqual(wording.check_riddles({name: lines}),
+                                 [self.refusal_for_a_mark(name, f"{point:04X}"),
+                                  f"{name} needs a list with at least one riddle"], ascii(name))
 
         def get_the_ending(rest):
             return {point for point in range(0x110000)
