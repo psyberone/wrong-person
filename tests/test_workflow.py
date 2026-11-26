@@ -68,7 +68,7 @@ COMMANDS = {
                 'python -m venv "$RUNNER_TEMP/clean"\n'
                 '"$RUNNER_TEMP/clean/bin/python" -m pip install --no-index --no-deps "$RUNNER_TEMP"/dist/wrong_person-*.whl\n',
                 'mkdir "$RUNNER_TEMP/apart"\n'
-                'cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$RUNNER_TEMP/apart/"\n'
+                'cp -R tests tools .github README.md CONTRIBUTING.md REVIEW.md pyproject.toml "$RUNNER_TEMP/apart/"\n'
                 'cd "$RUNNER_TEMP/apart"\n'
                 "test ! -e src\n"
                 "\"$RUNNER_TEMP/clean/bin/python\" - <<'PY'\n"
@@ -524,9 +524,9 @@ class Floors(unittest.TestCase):
 
     def test_the_tests_that_read_these_files_can_find_them_wherever_they_are_run(self):
         """mutmut runs the tests in a copy, and the package job runs them away from the source. Both must take these files along."""
-        for needed in ('"README.md"', '"CONTRIBUTING.md"', '"pyproject.toml"', '"tools/"', '".github/"'):
+        for needed in ('"README.md"', '"CONTRIBUTING.md"', '"REVIEW.md"', '"pyproject.toml"', '"tools/"', '".github/"'):
             self.assertIn(needed, " ".join(table(self.settings, "tool.mutmut")), needed)
-        self.assertIn('cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$RUNNER_TEMP/apart/"\n', COMMANDS["package"][3])
+        self.assertIn('cp -R tests tools .github README.md CONTRIBUTING.md REVIEW.md pyproject.toml "$RUNNER_TEMP/apart/"\n', COMMANDS["package"][3])
 
     def test_the_page_has_a_row_for_every_job(self):
         page = CONTRIBUTING.read_text(encoding="utf-8")

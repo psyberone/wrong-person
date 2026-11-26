@@ -81,7 +81,7 @@ python3 -m build --wheel --outdir "$check/dist"
 python3 -m venv "$check/clean"
 "$check/clean/bin/python" -m pip install --no-index --no-deps "$check"/dist/wrong_person-*.whl
 mkdir "$check/apart"
-cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$check/apart/"
+cp -R tests tools .github README.md CONTRIBUTING.md REVIEW.md pyproject.toml "$check/apart/"
 cd "$check/apart"
 test ! -e src
 "$check/clean/bin/python" - <<'PY'
