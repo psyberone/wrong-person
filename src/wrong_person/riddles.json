@@ -1,4 +1,25 @@
 {
+ "_places": {
+  "US": {
+   "Elvis": ["the King of Rock and Roll"],
+   "Rosa": ["the woman who refused to give up her bus seat in Montgomery"],
+   "Abraham": ["the president on the US penny"],
+   "George": ["the first president of the United States"]
+  },
+  "UK": {
+   "Sherlock": ["the detective of 221B Baker Street"],
+   "John": ["Dr Watson's first name"],
+   "Agatha": ["the author who created Hercule Poirot"],
+   "Harry": ["the boy wizard with the lightning scar"]
+  },
+  "Canada": {
+   "Neil": ["the first man on the Moon"],
+   "Sheldon": ["the physicist who says Bazinga"]
+  },
+  "Australia": {
+   "Kermit": ["the frog who hosts The Muppet Show"]
+  }
+ },
  "_rules": [
   "Each key is a first name a suspect could have: one word of at most 9 letters, A to Z with or without accents, starting with a capital and not all capitals.",
   "Each riddle is a noun phrase that completes 'Police have arrested ___' and opens '___ is next to the killer'.",
