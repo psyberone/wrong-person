@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unicodedata
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from wrong_person import engine as e
@@ -818,9 +819,11 @@ class Wording(unittest.TestCase):
             seen.add(text)
 
     def test_the_riddle_table_is_clean(self):
-        table = wording.load_riddles()
-        self.assertEqual(wording.check_riddles(table), [])
-        self.assertIn("the singer of Thriller", table["Michael"])
+        path = Path(wording.__file__).with_name("riddles.json")
+        entries = {name: lines for name, lines in json.loads(path.read_text(encoding="utf-8")).items()
+                   if not name.startswith("_")}
+        self.assertEqual(wording.check_riddles(entries), [])
+        self.assertIn("the singer of Thriller", [riddle.text for riddle in wording.load_riddles()["Michael"]])
 
     def test_the_riddle_table_quotes_sentences_the_code_prints(self):
         path = Path(wording.__file__).with_name("riddles.json")
@@ -1122,14 +1125,15 @@ class Wording(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "mine.json")
             path.write_text('{"_note": "skipped", "Tom": ["the cat who chases Jerry"]}', encoding="utf-8")
-            self.assertEqual(wording.load_riddles(path), {"Tom": ["the cat who chases Jerry"]})
+            self.assertEqual(wording.load_riddles(path), {"Tom": [wording.Riddle("the cat who chases Jerry")]})
 
     def test_a_riddle_file_may_hold_letters_outside_ascii(self):
         table = {"Zo\u00eb": ["the heroine of a French novel"], "Ren\u00e9e": ["the star of Bridget Jones\u2019s Diary"]}
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "mine.json")
             path.write_bytes(json.dumps(table, ensure_ascii=False).encode("utf-8"))
-            self.assertEqual(wording.load_riddles(path), table)
+            self.assertEqual(wording.load_riddles(path),
+                             {name: [wording.Riddle(line) for line in lines] for name, lines in table.items()})
 
     def test_a_riddle_file_with_a_line_break_in_a_riddle_is_refused(self):
         line = "the cat who\nchases Jerry"
@@ -1173,7 +1177,8 @@ class Wording(unittest.TestCase):
                 self.assertEqual(str(refused.exception), message)
 
     def test_notes_may_repeat_and_what_they_hold_is_not_read(self):
-        table = {"Carrie": ["the prom queen in the film of 1976"], "Nancy": ["the teenage detective Miss Drew"]}
+        table = {"Carrie": [wording.Riddle("the prom queen in the film of 1976")],
+                 "Nancy": [wording.Riddle("the teenage detective Miss Drew")]}
         files = ('{"_": "horror", "Carrie": ["the prom queen in the film of 1976"], '
                  '"_": "detectives", "Nancy": ["the teenage detective Miss Drew"]}',
                  '{"_about": {"by": "me", "by": "you", "Nancy": 1, "Nancy": 2}, '
@@ -1235,6 +1240,426 @@ class Wording(unittest.TestCase):
                 wording.load_riddles(path)
             with self.assertRaises(FileNotFoundError):
                 wording.load_riddles(Path(folder, "missing.json"))
+
+
+class RiddleRecords(unittest.TestCase):
+    """A riddle as an object with its places, victim mark, level, names kept off and a note on who it means (#15)."""
+
+    def test_each_group_holds_known_places_only_and_each_once(self):
+        for group, places in wording.GROUPS.items():
+            self.assertLessEqual(set(places), wording.PLACES, group)
+            self.assertFalse(set(places) & wording.GROUPS.keys(), group)
+            self.assertEqual(len(set(places)), len(places), group)
+        self.assertFalse(wording.PLACES & wording.GROUPS.keys())
+
+    def test_the_union_and_great_britain_are_the_nations_they_should_be(self):
+        self.assertEqual(wording.PLACES, {"US", "GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR"})
+        self.assertEqual(wording.GROUPS, {"GB": ("GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR"),
+                                          "GB-GBN": ("GB-ENG", "GB-SCT", "GB-WLS")})
+        self.assertEqual(wording.LEVELS, ("easy", "medium", "hard"))
+        self.assertEqual(wording.FIELDS, ("riddle", "places", "victim", "level", "keep_off", "who"))
+
+    def test_a_record_has_the_designs_defaults(self):
+        self.assertEqual(wording.Riddle("x"), wording.Riddle("x", None, True, "easy", (), None))
+        self.assertEqual([field.name for field in dataclasses.fields(wording.Riddle)],
+                         ["text", "places", "victim", "level", "keep_off", "who"])
+
+    def test_a_record_cannot_be_changed(self):
+        riddle = wording.Riddle("the cat who chases Jerry")
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            riddle.text = "the dog"
+        self.assertEqual(riddle.text, "the cat who chases Jerry")
+
+    # ---- the object form, as check_riddles reads it from the file
+    CAT = "the cat who chases Jerry"
+    DOH = "the man who says D'oh"
+
+    def check_one(self, name, entry):
+        return wording.check_riddles({name: [entry]})
+
+    def test_an_object_with_every_field_is_clean(self):
+        whole = {"riddle": self.DOH, "places": ["US", "GB"], "victim": False, "level": "medium",
+                 "keep_off": ["Marge"], "who": "the father in the cartoon"}
+        self.assertEqual(wording.check_riddles({"Homer": ["Bart Simpson's father", whole]}), [])
+        self.assertEqual(self.check_one("Homer", {"riddle": self.DOH, "places": ["GB", "GB-SCT"]}), [])
+        self.assertEqual(self.check_one("Homer", {"riddle": self.DOH}), [])
+        for code in sorted(wording.PLACES | wording.GROUPS.keys()):
+            self.assertEqual(self.check_one("Homer", {"riddle": self.DOH, "places": [code]}), [], code)
+
+    def test_an_object_without_a_riddle_or_with_a_stray_field_is_refused(self):
+        self.assertEqual(self.check_one("Tom", {}), ["Tom: {} has no riddle"])
+        self.assertEqual(self.check_one("Tom", {"places": ["US"]}), ["Tom: {'places': ['US']} has no riddle"])
+        self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "Victim": False}),
+                         [f"Tom: {self.CAT!r} has 'Victim', which is not a field of a riddle"])
+        self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "kind": "x", "victim": False, "who ": "x"}),
+                         [f"Tom: {self.CAT!r} has 'kind', which is not a field of a riddle",
+                          f"Tom: {self.CAT!r} has 'who ', which is not a field of a riddle"])
+        for value in (5, None, "", "  ", ["the cat"]):
+            self.assertEqual(self.check_one("Tom", {"riddle": value}), [f"Tom: {value!r} is not a riddle"], repr(value))
+        # with no riddle to quote, a problem with another field quotes the whole entry; nor is a missing riddle
+        # counted as a riddle, so two objects without one are not the same riddle twice
+        self.assertEqual(wording.check_riddles({"Tom": [{"level": "x"}, {}]}),
+                         ["Tom: {'level': 'x'} has no riddle", "Tom: {'level': 'x'}: level must be easy, medium or hard, got 'x'",
+                          "Tom: {} has no riddle"])
+        entry = {"riddle": 5, "level": "x", "Places": []}
+        self.assertEqual(self.check_one("Tom", entry),
+                         ["Tom: 5 is not a riddle", f"Tom: {entry!r} has 'Places', which is not a field of a riddle",
+                          f"Tom: {entry!r}: level must be easy, medium or hard, got 'x'"])
+
+    def test_a_bad_places_is_refused(self):
+        def check(places):
+            return self.check_one("Tom", {"riddle": self.CAT, "places": places})
+        for places in ("US", [], None, {"US": True}, ("US",)):
+            self.assertEqual(check(places),
+                             [f"Tom: {self.CAT!r}: places must be a list of codes; leave it out to count everywhere"],
+                             repr(places))
+        for code in (5, "FR", "us", "gb", "GB-UKM", "", None, ["US"]):
+            self.assertEqual(check([code]), [f"Tom: {self.CAT!r}: {code!r} is not a known place or group"], repr(code))
+        self.assertEqual(check(["UK"]), [f"Tom: {self.CAT!r}: 'UK' is not a code; write 'GB'"])
+        self.assertEqual(check(["US", "US"]), [f"Tom: {self.CAT!r}: 'US' is listed twice in places"])
+        self.assertEqual(check(["GB", "GB-SCT", "GB"]), [f"Tom: {self.CAT!r}: 'GB' is listed twice in places"])
+        # each code is judged where it stands, and every problem is reported
+        self.assertEqual(check(["FR", "US", "UK", "US", "FR"]),
+                         [f"Tom: {self.CAT!r}: 'FR' is not a known place or group",
+                          f"Tom: {self.CAT!r}: 'UK' is not a code; write 'GB'",
+                          f"Tom: {self.CAT!r}: 'US' is listed twice in places",
+                          f"Tom: {self.CAT!r}: 'FR' is not a known place or group"])
+
+    def test_a_victim_mark_is_true_or_false_only(self):
+        for value in (0, 1, "no", "false", None, 0.0, [False]):
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "victim": value}),
+                             [f"Tom: {self.CAT!r}: victim must be true or false, got {value!r}"], repr(value))
+        for value in (True, False):
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "victim": value}), [], value)
+
+    def test_a_level_is_one_of_three_words(self):
+        for value in ("Easy", "medium ", "HARD", "", 3, None, ["easy"]):
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "level": value}),
+                             [f"Tom: {self.CAT!r}: level must be easy, medium or hard, got {value!r}"], repr(value))
+        for value in wording.LEVELS:
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "level": value}), [], value)
+
+    def test_a_bad_keep_off_is_refused(self):
+        rule = Wording.RULE
+        def check(keep_off):
+            return self.check_one("Homer", {"riddle": self.DOH, "keep_off": keep_off})
+        for keep_off in ("Bart", [], None, {"Bart": True}):
+            self.assertEqual(check(keep_off),
+                             [f"Homer: {self.DOH!r}: keep_off must be a list of names; leave it out to keep no one off"],
+                             repr(keep_off))
+        for name, why in (("bart", ""), ("BART", ""), ("Maximilian", ""), (5, ""), (None, ""),
+                          ("Mary Ann", ": ' ' (U+0020) is not a letter A to Z"),
+                          ("\u0301Bart", ": it starts with an accent or other mark, U+0301, before any letter")):
+            self.assertEqual(check([name]), [f"Homer: {self.DOH!r}: keep_off holds {name!r}, which {rule}{why}"], repr(name))
+        # a name that is not text does not stop the check of the names after it
+        self.assertEqual(check([5, "bart", None]), [f"Homer: {self.DOH!r}: keep_off holds 5, which {rule}",
+                                                     f"Homer: {self.DOH!r}: keep_off holds 'bart', which {rule}",
+                                                     f"Homer: {self.DOH!r}: keep_off holds None, which {rule}"])
+        for own in ("Homer", "Hom\u00e8r", "Home\u0300r"):
+            self.assertEqual(check([own]), [f"Homer: {self.DOH!r}: keep_off holds the riddle's own name"], ascii(own))
+        # the own name written twice is the own name each time, and not also listed twice
+        self.assertEqual(check(["Homer", "Homer"]), [f"Homer: {self.DOH!r}: keep_off holds the riddle's own name"] * 2)
+        self.assertEqual(check(["Zo\u00eb", "Marge", "Zoe"]), [f"Homer: {self.DOH!r}: 'Zoe' is listed twice in keep_off"])
+        self.assertEqual(check(["McCoy", "Mccoy"]), [f"Homer: {self.DOH!r}: 'Mccoy' is listed twice in keep_off"])
+        self.assertEqual(check(["Marge", "Mona", "Zo\u00eb", "McCoy"]), [])
+
+    def test_who_is_text_or_left_out(self):
+        for value in (5, ["x"], None, False):
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "who": value}),
+                             [f"Tom: {self.CAT!r}: who must be text, got {value!r}"], repr(value))
+        for value in ("", "the grey cat in the cartoons with Jerry", "Zo\u00eb"):
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "who": value}), [], value)
+
+    def test_today_s_riddle_checks_apply_to_an_object_s_text(self):
+        page = Wording.PAGE
+        for text, problem in (("the cat who chases Jerry.", "should have no outer spaces or full stop"),
+                              (" the cat who chases Jerry", "should have no outer spaces or full stop"),
+                              ("the cat who chases Jerry ", "should have no outer spaces or full stop"),
+                              ("the cat who\u200bchases Jerry", f"holds U+200B, {page}"),
+                              ("the cat called TOM", "gives the name away")):
+            self.assertEqual(self.check_one("Tom", {"riddle": text, "level": "hard"}), [f"Tom: {text!r} {problem}"], ascii(text))
+        # the fields come first, in their order, then the checks of the text
+        text = "Tom the cat."
+        self.assertEqual(self.check_one("Tom", {"who": 5, "level": "x", "riddle": text, "victim": 0}),
+                         [f"Tom: {text!r}: victim must be true or false, got 0",
+                          f"Tom: {text!r}: level must be easy, medium or hard, got 'x'",
+                          f"Tom: {text!r}: who must be text, got 5",
+                          f"Tom: {text!r} should have no outer spaces or full stop",
+                          f"Tom: {text!r} gives the name away"])
+
+    def test_what_the_new_messages_quote_is_escaped(self):
+        # a line break, an escape, a line a workflow log would read as its own, and a right-to-left override
+        odd = "a\nb\x1b[31m\n##[error]x\u202e"
+        cases = [{"riddle": self.CAT, odd: 1},                     # a stray field's name
+                 {odd: 1},                                          # an object with no riddle
+                 {"riddle": self.CAT, "places": [odd]},
+                 {"riddle": self.CAT, "victim": odd},
+                 {"riddle": self.CAT, "level": odd},
+                 {"riddle": self.CAT, "who": [odd]},
+                 {"riddle": self.CAT, "keep_off": [odd]},
+                 {"riddle": self.CAT, "keep_off": [odd, odd]},      # bad, and listed twice
+                 {"riddle": odd, "level": "x"}]                     # the riddle quoted in a field's message
+        for entry in cases:
+            problems = self.check_one("Tom", entry)
+            self.assertTrue(problems, ascii(entry))
+            for problem in problems:
+                self.assertTrue(problem.isprintable(), ascii(problem))
+            self.assertTrue(any(repr(odd) in problem for problem in problems), ascii(entry))
+        twice = self.check_one("Tom", {"riddle": self.CAT, "keep_off": [odd, odd]})
+        self.assertIn(f"Tom: {self.CAT!r}: {odd!r} is listed twice in keep_off", twice)
+
+    def test_a_plain_line_and_an_object_with_the_same_text_are_listed_twice(self):
+        check = wording.check_riddles
+        self.assertEqual(check({"Tom": [self.CAT, {"riddle": "the cat who  chases jerry"}]}),
+                         ["Tom: 'the cat who  chases jerry' is listed twice"])
+        self.assertEqual(check({"Tom": [{"riddle": self.CAT}, self.CAT]}), [f"Tom: {self.CAT!r} is listed twice"])
+        self.assertEqual(check({"Tom": [{"riddle": self.CAT}, {"riddle": self.CAT, "level": "hard"}]}),
+                         [f"Tom: {self.CAT!r} is listed twice"])
+        self.assertEqual(check({"Tom": [{"riddle": "the cartoon cat"}], "Felix": ["the cartoon cat"]}),
+                         ["'the cartoon cat' is under both Tom and Felix"])
+        self.assertEqual(check({"Tom": ["the cartoon cat"], "Felix": [{"riddle": "the Cartoon cat"}]}),
+                         ["'the Cartoon cat' is under both Tom and Felix"])
+
+    def test_a_riddle_given_as_a_record_is_not_a_riddle(self):
+        riddle = wording.Riddle("the cat")
+        self.assertEqual(wording.check_riddles({"Tom": [riddle]}), [f"Tom: {riddle!r} is not a riddle"])
+        self.assertTrue(repr(riddle).startswith("Riddle("), repr(riddle))
+
+    # ---- the records load_riddles gives
+    def load(self, table):
+        """The table written to a file of its own, and read back."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            path.write_text(json.dumps(table), encoding="utf-8")
+            return wording.load_riddles(path)
+
+    def refusal(self, text):
+        """The ValueError load_riddles gives for a file holding `text`, as written."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            path.write_text(text, encoding="utf-8")
+            with self.assertRaises(ValueError) as refused:
+                wording.load_riddles(path)
+            return str(refused.exception)
+
+    def test_a_field_written_twice_in_a_riddle_is_refused(self):
+        cat = json.dumps(self.CAT)
+        self.assertEqual(self.refusal('{"Tom": [{"riddle": %s, "victim": false, "victim": true}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'victim' more than once")
+        # the first value is not checked, so it is not let pass unseen either
+        self.assertEqual(self.refusal('{"Tom": [{"riddle": %s, "places": ["UK"], "places": ["US"]}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'places' more than once")
+        self.assertEqual(self.refusal('{"Tom": [{"riddle": "the dog", "riddle": %s}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'riddle' more than once")
+        # three times is one report; two fields each written twice are reported in the order they come
+        self.assertEqual(self.refusal('{"Tom": [{"riddle": %s, "level": "easy", "level": "hard", "level": "easy"}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'level' more than once")
+        self.assertEqual(self.refusal('{"Tom": ["the dog", {"riddle": %s, "who": "a", "level": "easy", '
+                                      '"level": "hard", "who": "b"}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'who' more than once; "
+                         f"Tom: {self.CAT!r} has 'level' more than once")
+        # with no riddle to quote, the object is quoted, as in the other messages; it comes after what the check finds
+        self.assertEqual(self.refusal('{"Tom": [{"riddle": 5, "victim": true, "victim": false}]}'),
+                         "mine.json: Tom: 5 is not a riddle; Tom: {'riddle': 5, 'victim': False} has 'victim' more than once")
+        # a repeat is found under any name, not only the first
+        self.assertEqual(self.refusal('{"Ann": ["the dog"], "Tom": [{"riddle": %s, "victim": false, "victim": true}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'victim' more than once")
+        # a name that holds no list is refused by the check, naming the file, and not looked into for repeats
+        self.assertEqual(self.refusal('{"Ann": 5, "Tom": [{"riddle": %s}]}' % cat), "mine.json: Ann needs a list with at least one riddle")
+        # what the message quotes is escaped: written in the file as \u escapes, a line break, an escape, a line a
+        # workflow log would read as its own, and a right-to-left override
+        odd = "\\n\\u001b[31m\\n##[error]x\\u202e"
+        message = self.refusal('{"Tom": [{"riddle": "the cat%s", "x%s": 1, "x%s": 2}]}' % (odd, odd, odd))
+        riddle, field = json.loads('"the cat%s"' % odd), json.loads('"x%s"' % odd)
+        self.assertTrue(message.startswith("mine.json: "), ascii(message))
+        self.assertIn(f"Tom: {riddle!r} has {field!r} more than once", message)
+        self.assertTrue(message.isprintable(), ascii(message))
+        # a note may still repeat a key, inside an object or not
+        table = self.load_text('{"_rules": [{"a": 1, "a": 2}], "_x": {"b": 1, "b": 2}, "Tom": [{"riddle": %s}]}' % cat)
+        self.assertEqual(table, {"Tom": [wording.Riddle(self.CAT)]})
+
+    def test_a_table_nested_too_deeply_to_check_is_refused_by_name(self):
+        # how deep a value must be to overflow in the check depends on the Python and the computer, so it is made to
+        with unittest.mock.patch.object(wording, "check_riddles", side_effect=RecursionError("too deep")):
+            message = self.refusal('{"Tom": ["the cat"]}')
+        self.assertEqual(message, "mine.json: the file is nested too deeply to check")
+
+    def load_text(self, text):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            path.write_text(text, encoding="utf-8")
+            return wording.load_riddles(path)
+
+    def test_a_plain_line_is_a_riddle_with_every_default(self):
+        self.assertEqual(self.load({"Tom": ["the cat"]}), {"Tom": [wording.Riddle("the cat", None, True, "easy", (), None)]})
+        self.assertEqual(self.load({"Tom": [{"riddle": "the cat"}]}),
+                         {"Tom": [wording.Riddle("the cat", None, True, "easy", (), None)]})
+
+    def test_an_object_is_read_with_every_mark(self):
+        who = "the father in the cartoon"
+        whole = {"riddle": self.DOH, "places": ["US", "GB"], "victim": False, "level": "medium",
+                 "keep_off": ["Marge"], "who": who}
+        self.assertEqual(self.load({"Homer": [whole]})["Homer"],
+                         [wording.Riddle(self.DOH, ("US", "GB"), False, "medium", ("Marge",), who)])
+        # the codes as written, in their order, a group and a place in it both kept
+        self.assertEqual(self.load({"Homer": [{"riddle": self.DOH, "places": ["GB-SCT", "GB"], "level": "hard"}]})["Homer"],
+                         [wording.Riddle(self.DOH, ("GB-SCT", "GB"), True, "hard", (), None)])
+        self.assertEqual(self.load({"Homer": [{"riddle": self.DOH, "victim": True, "who": ""}]})["Homer"],
+                         [wording.Riddle(self.DOH, None, True, "easy", (), "")])
+
+    def test_a_printed_table_name_is_kept_off_by_itself(self):
+        table = self.load({"Homer": ["Bart Simpson's father", {"riddle": "the man Bart calls Dad", "level": "hard"}],
+                           "Bart": ["the boy with the slingshot"]})
+        self.assertEqual([riddle.keep_off for riddle in table["Homer"]], [("Bart",), ("Bart",)])
+        self.assertEqual(table["Bart"][0].keep_off, ())
+        # in the order the riddle prints them, each once
+        table = self.load({"Ann": ["the sister Tom and Bob and Tom share"], "Tom": ["the cat"], "Bob": ["the builder"]})
+        self.assertEqual(table["Ann"][0].keep_off, ("Tom", "Bob"))
+
+    def test_written_names_come_first_and_each_name_once(self):
+        lisa = {"Lisa": ["the Simpson who plays the saxophone"]}
+        mona = "the painter of the Mona Lisa"
+        for written, kept in ((["Mona", "Lisa"], ("Mona", "Lisa")), (["Mona"], ("Mona", "Lisa")),
+                              (["Lisa", "Mona"], ("Lisa", "Mona")), (["Lisa"], ("Lisa",))):
+            table = self.load({"Leonardo": [{"riddle": mona, "keep_off": written}], **lisa})
+            self.assertEqual(table["Leonardo"][0].keep_off, kept, written)
+        # a written name is the same as a printed one in plain letters, in any case: it is kept as written
+        table = self.load({"Tom": [{"riddle": "the twin of Zo\u00eb", "keep_off": ["Zoe"]}],
+                           "Zo\u00eb": ["the heroine of a French novel"]})
+        self.assertEqual(table["Tom"][0].keep_off, ("Zoe",))
+        # and the other way round: written with its accent, printed without
+        table = self.load({"Tom": [{"riddle": "the twin of Zoe", "keep_off": ["Zo\u00eb"]}],
+                           "Zo\u00eb": ["the heroine of a French novel"]})
+        self.assertEqual(table["Tom"][0].keep_off, ("Zo\u00eb",))
+
+    def test_a_printed_name_is_found_whatever_its_case_or_accents(self):
+        lines = ["ZOE's twin", "Zo\u00eb's twin brother", "Zoe\u0308's twin sister", "Zoe's twin cousin", "the twin of ZO\u00cb"]
+        table = self.load({"Tom": lines, "Zo\u00eb": ["the heroine of a French novel"]})
+        self.assertEqual([riddle.keep_off for riddle in table["Tom"]], [("Zo\u00eb",)] * len(lines))
+        # and the table's own spelling is kept, whichever way the table writes it
+        table = self.load({"Tom": ["Zo\u00eb's twin"], "Zoe\u0308": ["the heroine of a French novel"]})
+        self.assertEqual(table["Tom"][0].keep_off, ("Zoe\u0308",))
+        # an accent written apart inside the name does not split it in two
+        table = self.load({"Tom": ["Rene\u0301e's brother"], "Ren\u00e9e": ["the star of a diary film"]})
+        self.assertEqual(table["Tom"][0].keep_off, ("Ren\u00e9e",))
+
+    def test_printed_names_are_found_alike_on_every_python(self):
+        # U+A7C1 is a letter since Unicode 14 and unassigned in Unicode 3.2, so it ends the word on every Python
+        table = self.load({"Homer": ["Bart\ua7c1 Simpson's father"], "Bart": ["the boy with the slingshot"]})
+        self.assertEqual(table["Homer"][0].keep_off, ("Bart",))
+        # U+0221 is a letter since Unicode 4.0, so every Python's own tables would join it to the name
+        table = self.load({"Homer": ["Bart\u0221 Simpson's father"], "Bart": ["the boy with the slingshot"]})
+        self.assertEqual(table["Homer"][0].keep_off, ("Bart",))
+        # a digit ends a word; a modifier letter (U+02B0) or a letter with no case (U+05D0) is part of one
+        table = self.load({"Homer": ["Bart2 Simpson's father", "Bart\u02b0 Simpson's father", "Bart\u05d0 Simpson's father"],
+                           "Bart": ["the boy with the slingshot"]})
+        self.assertEqual([riddle.keep_off for riddle in table["Homer"]], [("Bart",), (), ()])
+        # a capital with its accent on starts a printed name, and one in small letters does not
+        table = self.load({"Tom": ["\u00c9mile's twin", "the twin of \u00e9mile"], "\u00c9mile": ["the boy in the book"]})
+        self.assertEqual([riddle.keep_off for riddle in table["Tom"]], [("\u00c9mile",), ()])
+
+    def test_a_word_in_small_letters_keeps_no_one_off(self):
+        table = self.load({"Bob": ["the jack of all trades", "the man who knows jack"], "Jack": ["the lad with the beanstalk"]})
+        self.assertEqual([riddle.keep_off for riddle in table["Bob"]], [(), ()])
+        self.assertEqual(self.load({"Bob": ["the man Jack knows"], "Jack": ["the lad with the beanstalk"]})["Bob"][0].keep_off,
+                         ("Jack",))
+
+    def test_a_name_inside_a_longer_word_keeps_no_one_off(self):
+        table = self.load({"Sanders": ["the Kentucky colonel"], "Ken": ["Barbie's boyfriend"]})
+        self.assertEqual(table["Sanders"][0].keep_off, ())
+        table = self.load({"Sanders": ["the Kentucky colonel Ken knows"], "Ken": ["Barbie's boyfriend"]})
+        self.assertEqual(table["Sanders"][0].keep_off, ("Ken",))
+
+    def test_the_shipped_table_keeps_off_the_eleven_printed_names(self):
+        printed = [("Barbie", "Ken"), ("Bart", "Homer"), ("Ernie", "Bert"), ("Fred", "Wilma"), ("Homer", "Bart"),
+                   ("Jack", "Rose"), ("Jerry", "Tom"), ("Ken", "Barbie"), ("Leonardo", "Lisa"), ("Romeo", "Juliet"),
+                   ("Tom", "Jerry")]
+        table = wording.load_riddles()
+        kept = sorted((name, riddle.keep_off) for name, riddles in table.items() for riddle in riddles if riddle.keep_off)
+        self.assertEqual(kept, [(owner, (name,)) for owner, name in printed])
+        # no riddle in the table carries a mark yet: each is its text with the defaults, and what it prints
+        for name, riddles in table.items():
+            for riddle in riddles:
+                self.assertEqual(riddle, wording.Riddle(riddle.text, None, True, "easy", riddle.keep_off, None), name)
+
+    # ---- which riddles count for a place
+    CODES = ("US", "GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR", "GB", "GB-GBN")
+
+    def counted(self, places):
+        """The codes a riddle with these places counts for."""
+        riddle = wording.Riddle("the cat", places)
+        return {code for code in self.CODES if wording.counts_for(riddle, code) is True}
+
+    def test_a_riddle_with_no_places_counts_everywhere(self):
+        self.assertEqual(sorted(self.CODES), sorted(wording.PLACES | wording.GROUPS.keys()))
+        for code in self.CODES:
+            self.assertIs(wording.counts_for(wording.Riddle("the cat"), code), True, code)
+
+    def test_a_riddle_counts_for_a_place_it_names_or_a_group_holding_it(self):
+        for code in self.CODES:
+            self.assertIs(wording.counts_for(wording.Riddle("the cat", ("US",)), code), code == "US", code)
+        self.assertEqual(self.counted(("US",)), {"US"})
+        self.assertEqual(self.counted(("GB",)), {"GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR", "GB", "GB-GBN"})
+        self.assertEqual(self.counted(("GB-GBN",)), {"GB-ENG", "GB-SCT", "GB-WLS", "GB-GBN"})
+        self.assertEqual(self.counted(("GB-NIR",)), {"GB-NIR"})
+        self.assertEqual(self.counted(("US", "GB-WLS")), {"US", "GB-WLS"})
+        self.assertEqual(self.counted(("US", "GB")), set(self.CODES))
+
+    def test_a_riddle_for_one_nation_does_not_count_for_the_union(self):
+        self.assertEqual(self.counted(("GB-SCT",)), {"GB-SCT"})
+        # a group counts when every place in it does, however the places are named
+        self.assertEqual(self.counted(("GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR")),
+                         {"GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR", "GB", "GB-GBN"})
+        self.assertEqual(self.counted(("GB-WLS", "GB-ENG", "GB-SCT")), {"GB-ENG", "GB-SCT", "GB-WLS", "GB-GBN"})
+        self.assertEqual(self.counted(("GB-GBN", "GB-NIR")), {"GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR", "GB", "GB-GBN"})
+        self.assertEqual(self.counted(("GB-ENG", "GB-SCT", "GB-NIR")), {"GB-ENG", "GB-SCT", "GB-NIR"})
+
+    def test_a_wrong_code_is_refused(self):
+        table = {"Tom": [wording.Riddle("the cat")], "Bob": [wording.Riddle("the builder", ("US",))]}
+        for code, message in (("UK", "'UK' is not a code; write 'GB'"), ("FR", "'FR' is not a known place or group"),
+                              ("us", "'us' is not a known place or group"), ("", "'' is not a known place or group"),
+                              (None, "None is not a known place or group"), (["US"], "['US'] is not a known place or group"),
+                              (("US",), "('US',) is not a known place or group")):
+            for riddle in table.values():
+                with self.assertRaises(ValueError) as refused:
+                    wording.counts_for(riddle[0], code)
+                self.assertEqual(str(refused.exception), message, repr(code))
+            for given in (table, {}):
+                with self.assertRaises(ValueError) as refused:
+                    wording.riddles_for(given, code)
+                self.assertEqual(str(refused.exception), message, repr(code))
+
+    def test_only_the_riddles_for_a_place_are_kept(self):
+        everywhere, us, us_too, gb = (wording.Riddle("the cat"), wording.Riddle("the builder", ("US",)),
+                                      wording.Riddle("the sister", ("US",)), wording.Riddle("the aunt", ("GB",)))
+        table = {"Tom": [everywhere], "Bob": [us], "Ann": [us_too, gb]}
+        as_given = {name: list(riddles) for name, riddles in table.items()}
+        self.assertEqual(wording.riddles_for(table, "GB-ENG"), {"Tom": [everywhere], "Ann": [gb]})
+        self.assertEqual(list(wording.riddles_for(table, "US")), ["Tom", "Bob", "Ann"])
+        self.assertEqual(wording.riddles_for(table, "US"), {"Tom": [everywhere], "Bob": [us], "Ann": [us_too]})
+        self.assertEqual(wording.riddles_for(table, "GB"), {"Tom": [everywhere], "Ann": [gb]})
+        self.assertEqual(wording.riddles_for({}, "US"), {})
+        kept = wording.riddles_for(table, "US")
+        kept["Ann"].append(gb)
+        self.assertEqual(table, as_given)
+        # a list where every riddle counts is a new list too, not the table's own
+        kept = wording.riddles_for(table, "US")
+        self.assertIsNot(kept["Tom"], table["Tom"])
+        kept["Tom"].append(gb)
+        self.assertEqual(table, as_given)
+        self.assertEqual(wording.riddles_for({"Bob": [us]}, "GB-NIR"), {})
+
+    def test_the_riddle_table_describes_the_object_form(self):
+        path = Path(wording.__file__).with_name("riddles.json")
+        notes = " ".join(json.loads(path.read_text(encoding="utf-8"))["_rules"])
+        for field in wording.FIELDS:
+            self.assertRegex(notes, rf"\b{field}\b", field)
+        for code in sorted(wording.PLACES | wording.GROUPS.keys()):
+            self.assertRegex(notes, rf"(?<![\w-]){code}(?![\w-])", code)
+        for level in wording.LEVELS:
+            self.assertRegex(notes, rf"\b{level}\b", level)
+        self.assertIn("kept off by itself", notes)
+        self.assertIn("not UK", notes)
 
 
 if __name__ == "__main__":

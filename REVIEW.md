@@ -88,8 +88,12 @@ Comes in, from the program that calls it:
   `engine.case_from_json`;
 - a riddle table file, either the one shipped in `src/wrong_person/riddles.json`
   or one the caller names, which may have been written for an earlier version:
-  `wording.load_riddles`;
-- a riddle table already in memory: `wording.check_riddles`;
+  `wording.load_riddles`, which gives each riddle back as a record, a
+  `wording.Riddle`;
+- a riddle table already in memory, as the file holds it: `wording.check_riddles`;
+- a code for a place or a group of places: `wording.counts_for` and
+  `wording.riddles_for`, which refuse a wrong code with a `ValueError`
+  ([#15](https://github.com/psyberone/wrong-person/issues/15));
 - riddle text: `wording.sentence` and `wording.arrest`;
 - letters, names and numbers given straight to four helpers that are public too:
   `wording.letters`, `engine.matches`, `engine.Board.index` and
@@ -106,7 +110,9 @@ Python's own errors
 other functions that take a board or rules, such as `engine.survivors` and
 `engine.audit`, take them as the calls above made them and do not check them
 again. Two of them, `engine.holds` and `engine.decoys`, also take a suspect's
-number, and do not check that either.
+number, and do not check that either. In the same way, `wording.counts_for` and
+`wording.riddles_for` take riddles as `wording.load_riddles` made them and do not
+check them again.
 
 Goes out, to the program that calls it:
 
@@ -118,6 +124,11 @@ Goes out, to the program that calls it:
   the package does not refuse
   ([#41](https://github.com/psyberone/wrong-person/issues/41));
 - a case as JSON text, in plain ASCII: `engine.case_to_json`;
+- riddles as records that cannot be changed, from `wording.load_riddles` and
+  `wording.riddles_for`, and whether a riddle counts for a code, from
+  `wording.counts_for`. A record's text, names to keep off and note on who it
+  means are the table's own, as written, except the names the riddle prints,
+  which are spelt as the table spells them;
 - error messages, which can quote what they refuse. Most quote it in Python's
   own form, in quotes and with control and format characters written as escapes;
   some other characters that print as nothing are left as they are. A riddle
