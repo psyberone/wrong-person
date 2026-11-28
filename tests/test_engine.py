@@ -1471,6 +1471,68 @@ class RiddleRecords(unittest.TestCase):
             for riddle in riddles:
                 self.assertEqual(riddle, wording.Riddle(riddle.text, None, True, "easy", riddle.keep_off, None), name)
 
+    # ---- which riddles count for a place
+    CODES = ("US", "GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR", "GB", "GB-GBN")
+
+    def counted(self, places):
+        """The codes a riddle with these places counts for."""
+        riddle = wording.Riddle("the cat", places)
+        return {code for code in self.CODES if wording.counts_for(riddle, code) is True}
+
+    def test_a_riddle_with_no_places_counts_everywhere(self):
+        self.assertEqual(sorted(self.CODES), sorted(wording.PLACES | wording.GROUPS.keys()))
+        for code in self.CODES:
+            self.assertIs(wording.counts_for(wording.Riddle("the cat"), code), True, code)
+
+    def test_a_riddle_counts_for_a_place_it_names_or_a_group_holding_it(self):
+        for code in self.CODES:
+            self.assertIs(wording.counts_for(wording.Riddle("the cat", ("US",)), code), code == "US", code)
+        self.assertEqual(self.counted(("US",)), {"US"})
+        self.assertEqual(self.counted(("GB",)), {"GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR", "GB", "GB-GBN"})
+        self.assertEqual(self.counted(("GB-GBN",)), {"GB-ENG", "GB-SCT", "GB-WLS", "GB-GBN"})
+        self.assertEqual(self.counted(("GB-NIR",)), {"GB-NIR"})
+        self.assertEqual(self.counted(("US", "GB-WLS")), {"US", "GB-WLS"})
+        self.assertEqual(self.counted(("US", "GB")), set(self.CODES))
+
+    def test_a_riddle_for_one_nation_does_not_count_for_the_union(self):
+        self.assertEqual(self.counted(("GB-SCT",)), {"GB-SCT"})
+        # a group counts when every place in it does, however the places are named
+        self.assertEqual(self.counted(("GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR")),
+                         {"GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR", "GB", "GB-GBN"})
+        self.assertEqual(self.counted(("GB-WLS", "GB-ENG", "GB-SCT")), {"GB-ENG", "GB-SCT", "GB-WLS", "GB-GBN"})
+        self.assertEqual(self.counted(("GB-GBN", "GB-NIR")), {"GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR", "GB", "GB-GBN"})
+        self.assertEqual(self.counted(("GB-ENG", "GB-SCT", "GB-NIR")), {"GB-ENG", "GB-SCT", "GB-NIR"})
+
+    def test_a_wrong_code_is_refused(self):
+        table = {"Tom": [wording.Riddle("the cat")], "Bob": [wording.Riddle("the builder", ("US",))]}
+        for code, message in (("UK", "'UK' is not a code; write 'GB'"), ("FR", "'FR' is not a known place or group"),
+                              ("us", "'us' is not a known place or group"), ("", "'' is not a known place or group"),
+                              (None, "None is not a known place or group"), (["US"], "['US'] is not a known place or group"),
+                              (("US",), "('US',) is not a known place or group")):
+            for riddle in table.values():
+                with self.assertRaises(ValueError) as refused:
+                    wording.counts_for(riddle[0], code)
+                self.assertEqual(str(refused.exception), message, repr(code))
+            for given in (table, {}):
+                with self.assertRaises(ValueError) as refused:
+                    wording.riddles_for(given, code)
+                self.assertEqual(str(refused.exception), message, repr(code))
+
+    def test_only_the_riddles_for_a_place_are_kept(self):
+        everywhere, us, us_too, gb = (wording.Riddle("the cat"), wording.Riddle("the builder", ("US",)),
+                                      wording.Riddle("the sister", ("US",)), wording.Riddle("the aunt", ("GB",)))
+        table = {"Tom": [everywhere], "Bob": [us], "Ann": [us_too, gb]}
+        as_given = {name: list(riddles) for name, riddles in table.items()}
+        self.assertEqual(wording.riddles_for(table, "GB-ENG"), {"Tom": [everywhere], "Ann": [gb]})
+        self.assertEqual(list(wording.riddles_for(table, "US")), ["Tom", "Bob", "Ann"])
+        self.assertEqual(wording.riddles_for(table, "US"), {"Tom": [everywhere], "Bob": [us], "Ann": [us_too]})
+        self.assertEqual(wording.riddles_for(table, "GB"), {"Tom": [everywhere], "Ann": [gb]})
+        self.assertEqual(wording.riddles_for({}, "US"), {})
+        kept = wording.riddles_for(table, "US")
+        kept["Ann"].append(gb)
+        self.assertEqual(table, as_given)
+        self.assertEqual(wording.riddles_for({"Bob": [us]}, "GB-NIR"), {})
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

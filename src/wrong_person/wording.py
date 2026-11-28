@@ -296,6 +296,41 @@ def check_riddles(table):
     return problems
 
 
+def counts_for(riddle, code):
+    """Does the riddle count for this code? -> True or False.
+
+    For a place: the riddle has no places, or names the place, or names a group the
+    place is in. For a group: the riddle counts for every place in it, so a riddle for
+    Scotland alone does not count for GB. A code that is not one of PLACES or GROUPS,
+    UK among them, is refused with a ValueError. The riddle is taken as load_riddles
+    made it, and not checked again.
+    """
+    _refuse_a_wrong(code)
+    if riddle.places is None:
+        return True
+    return all(any(place == named or place in GROUPS.get(named, ()) for named in riddle.places)
+               for place in GROUPS.get(code, (code,)))
+
+
+def riddles_for(table, code):
+    """Only the riddles that count for the code -> {name: [Riddle, ...]}.
+
+    `table` is what load_riddles gave. A name left with no riddle is left out, and the
+    table given is not changed. A wrong code is refused as counts_for refuses it, even
+    when the table is empty.
+    """
+    _refuse_a_wrong(code)
+    kept = {name: [riddle for riddle in riddles if counts_for(riddle, code)] for name, riddles in table.items()}
+    return {name: riddles for name, riddles in kept.items() if riddles}
+
+
+def _refuse_a_wrong(code):
+    """A code that is not one of PLACES or GROUPS is refused with a ValueError that says why."""
+    wrong = _code_problem(code)
+    if wrong is not None:
+        raise ValueError(wrong)
+
+
 def _code_problem(code):
     """What is wrong with a code for a place or a group, or None when it is one of PLACES or GROUPS."""
     if code == "UK":
