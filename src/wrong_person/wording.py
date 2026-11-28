@@ -43,6 +43,8 @@ GROUPS = {"GB": ("GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR"),     # the United Kingd
           "GB-GBN": ("GB-ENG", "GB-SCT", "GB-WLS")}           # Great Britain
 LEVELS = ("easy", "medium", "hard")
 FIELDS = ("riddle", "places", "victim", "level", "keep_off", "who")     # what a riddle written as an object may hold
+_NAME_RULE = ("must be one word of at most 9 letters, A to Z with or without accents, "
+              "starting with a capital and not all capitals")
 
 
 @dataclass(frozen=True)
@@ -202,11 +204,19 @@ def load_riddles(path=None):
 def check_riddles(table):
     """What a machine can check in a riddle table -> a list of problems, empty when clean.
 
+    The table is as the file holds it: each name has a list of riddles, and each riddle
+    is a plain line or an object with the fields in FIELDS (a Riddle record is neither,
+    so it is not a riddle here). An object's text is checked first, then any field it
+    holds that is not in FIELDS, then its other fields in the order FIELDS gives, and
+    then its text as a plain line's is.
+
     Whether a riddle is easy, and whether it points to one person only, is on the author.
     """
     problems, seen, plain_names = [], {}, {}
-    for name, lines in table.items():
-        plain = _plain(name)
+
+    def broken(name, plain):
+        """What the name breaks of the name rule, as the words that follow it, or None.
+        `plain` is the name with its accents taken off."""
         if not (plain.isascii() and plain.isalpha() and len(plain) <= 9
                 and name[0].isupper() and not plain.isupper()):
             odd = next((char for char in name
@@ -214,17 +224,32 @@ def check_riddles(table):
             why = "" if odd is None else f": {odd!r} (U+{ord(odd):04X}) is not a letter A to Z"
             if name and not _plain(name[0]):    # a mark first draws on the quote before the name: give its code
                 why = f": it starts with an accent or other mark, U+{ord(name[0]):04X}, before any letter"
-            problems.append(f"{name!r} must be one word of at most 9 letters, A to Z with or "
-                            "without accents, starting with a capital and not all capitals" + why)
+            return _NAME_RULE + why
+        return None
+
+    for name, lines in table.items():
+        plain = _plain(name)
+        rule = broken(name, plain)
+        if rule is not None:
+            problems.append(f"{name!r} {rule}")
         if plain.lower() in plain_names:
             problems.append(f"{name!r} and {plain_names[plain.lower()]!r} are one name in plain letters")
         plain_names.setdefault(plain.lower(), name)
         if not isinstance(lines, list) or not lines:
             problems.append(f"{name} needs a list with at least one riddle")
             continue
-        for line in lines:
-            if not isinstance(line, str) or not line.strip():
+        for entry in lines:
+            line = entry.get("riddle") if isinstance(entry, dict) else entry
+            if isinstance(entry, dict) and "riddle" not in entry:
+                problems.append(f"{name}: {entry!r} has no riddle")
+                line = None
+            elif not isinstance(line, str) or not line.strip():
                 problems.append(f"{name}: {line!r} is not a riddle")
+                line = None
+            if isinstance(entry, dict):     # with no riddle to quote, the whole object is quoted
+                quoted = repr(entry if line is None else line)
+                problems += [f"{name}: {quoted}{problem}" for problem in _field_problems(entry, name, broken)]
+            if line is None:
                 continue
             key = " ".join(line.lower().split())
             if seen.get(key) == name:
@@ -240,4 +265,61 @@ def check_riddles(table):
                                 "a character that cannot go on a page")
             if _gives_away(name, line):
                 problems.append(f"{name}: {line!r} gives the name away")
+    return problems
+
+
+def _code_problem(code):
+    """What is wrong with a code for a place or a group, or None when it is one of PLACES or GROUPS."""
+    if code == "UK":
+        return "'UK' is not a code; write 'GB'"
+    if not isinstance(code, str) or (code not in PLACES and code not in GROUPS):
+        return f"{code!r} is not a known place or group"
+    return None
+
+
+def _field_problems(entry, owner, broken):
+    """What is wrong with the fields of a riddle written as an object, other than its text.
+
+    Each problem is given as the words that follow the riddle in its message: a field not
+    in FIELDS, in the object's own order, then each field in the order FIELDS gives.
+    `owner` is the name the riddle is under. `broken(name, plain)` says what a name
+    breaks of the name rule, or None.
+    """
+    problems = [f" has {field!r}, which is not a field of a riddle" for field in entry if field not in FIELDS]
+    if "places" in entry:
+        places = entry["places"]
+        if not isinstance(places, list) or not places:
+            problems.append(": places must be a list of codes; leave it out to count everywhere")
+        else:
+            for at, code in enumerate(places):
+                wrong = _code_problem(code)
+                if wrong is not None:
+                    problems.append(f": {wrong}")
+                elif code in places[:at]:
+                    problems.append(f": {code!r} is listed twice in places")
+    if "victim" in entry and type(entry["victim"]) is not bool:      # not 0 or 1, which JSON tells apart
+        problems.append(f": victim must be true or false, got {entry['victim']!r}")
+    if "level" in entry and entry["level"] not in LEVELS:
+        problems.append(f": level must be easy, medium or hard, got {entry['level']!r}")
+    if "keep_off" in entry:
+        keep_off = entry["keep_off"]
+        if not isinstance(keep_off, list) or not keep_off:
+            problems.append(": keep_off must be a list of names; leave it out to keep no one off")
+        else:
+            own, held = _plain(owner).lower(), []
+            for kept in keep_off:
+                if not isinstance(kept, str):
+                    problems.append(f": keep_off holds {kept!r}, which {_NAME_RULE}")
+                    continue
+                plain = _plain(kept)
+                rule = broken(kept, plain)
+                if rule is not None:
+                    problems.append(f": keep_off holds {kept!r}, which {rule}")
+                if plain.lower() == own:
+                    problems.append(": keep_off holds the riddle's own name")
+                elif plain.lower() in held:
+                    problems.append(f": {kept!r} is listed twice in keep_off")
+                held.append(plain.lower())
+    if "who" in entry and not isinstance(entry["who"], str):
+        problems.append(f": who must be text, got {entry['who']!r}")
     return problems

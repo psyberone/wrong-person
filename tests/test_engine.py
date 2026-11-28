@@ -1265,6 +1265,130 @@ class RiddleRecords(unittest.TestCase):
             riddle.text = "the dog"
         self.assertEqual(riddle.text, "the cat who chases Jerry")
 
+    # ---- the object form, as check_riddles reads it from the file
+    CAT = "the cat who chases Jerry"
+    DOH = "the man who says D'oh"
+
+    def check_one(self, name, entry):
+        return wording.check_riddles({name: [entry]})
+
+    def test_an_object_with_every_field_is_clean(self):
+        whole = {"riddle": self.DOH, "places": ["US", "GB"], "victim": False, "level": "medium",
+                 "keep_off": ["Marge"], "who": "the father in the cartoon"}
+        self.assertEqual(wording.check_riddles({"Homer": ["Bart Simpson's father", whole]}), [])
+        self.assertEqual(self.check_one("Homer", {"riddle": self.DOH, "places": ["GB", "GB-SCT"]}), [])
+        self.assertEqual(self.check_one("Homer", {"riddle": self.DOH}), [])
+        for code in sorted(wording.PLACES | wording.GROUPS.keys()):
+            self.assertEqual(self.check_one("Homer", {"riddle": self.DOH, "places": [code]}), [], code)
+
+    def test_an_object_without_a_riddle_or_with_a_stray_field_is_refused(self):
+        self.assertEqual(self.check_one("Tom", {}), ["Tom: {} has no riddle"])
+        self.assertEqual(self.check_one("Tom", {"places": ["US"]}), ["Tom: {'places': ['US']} has no riddle"])
+        self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "Victim": False}),
+                         [f"Tom: {self.CAT!r} has 'Victim', which is not a field of a riddle"])
+        self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "kind": "x", "victim": False, "who ": "x"}),
+                         [f"Tom: {self.CAT!r} has 'kind', which is not a field of a riddle",
+                          f"Tom: {self.CAT!r} has 'who ', which is not a field of a riddle"])
+        for value in (5, None, "", "  ", ["the cat"]):
+            self.assertEqual(self.check_one("Tom", {"riddle": value}), [f"Tom: {value!r} is not a riddle"], repr(value))
+        # with no riddle to quote, a problem with another field quotes the whole entry
+        entry = {"riddle": 5, "level": "x", "Places": []}
+        self.assertEqual(self.check_one("Tom", entry),
+                         ["Tom: 5 is not a riddle", f"Tom: {entry!r} has 'Places', which is not a field of a riddle",
+                          f"Tom: {entry!r}: level must be easy, medium or hard, got 'x'"])
+
+    def test_a_bad_places_is_refused(self):
+        def check(places):
+            return self.check_one("Tom", {"riddle": self.CAT, "places": places})
+        for places in ("US", [], None, {"US": True}, ("US",)):
+            self.assertEqual(check(places),
+                             [f"Tom: {self.CAT!r}: places must be a list of codes; leave it out to count everywhere"],
+                             repr(places))
+        for code in (5, "FR", "us", "gb", "GB-UKM", "", None, ["US"]):
+            self.assertEqual(check([code]), [f"Tom: {self.CAT!r}: {code!r} is not a known place or group"], repr(code))
+        self.assertEqual(check(["UK"]), [f"Tom: {self.CAT!r}: 'UK' is not a code; write 'GB'"])
+        self.assertEqual(check(["US", "US"]), [f"Tom: {self.CAT!r}: 'US' is listed twice in places"])
+        self.assertEqual(check(["GB", "GB-SCT", "GB"]), [f"Tom: {self.CAT!r}: 'GB' is listed twice in places"])
+        # each code is judged where it stands, and every problem is reported
+        self.assertEqual(check(["FR", "US", "UK", "US", "FR"]),
+                         [f"Tom: {self.CAT!r}: 'FR' is not a known place or group",
+                          f"Tom: {self.CAT!r}: 'UK' is not a code; write 'GB'",
+                          f"Tom: {self.CAT!r}: 'US' is listed twice in places",
+                          f"Tom: {self.CAT!r}: 'FR' is not a known place or group"])
+
+    def test_a_victim_mark_is_true_or_false_only(self):
+        for value in (0, 1, "no", "false", None, 0.0, [False]):
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "victim": value}),
+                             [f"Tom: {self.CAT!r}: victim must be true or false, got {value!r}"], repr(value))
+        for value in (True, False):
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "victim": value}), [], value)
+
+    def test_a_level_is_one_of_three_words(self):
+        for value in ("Easy", "medium ", "HARD", "", 3, None, ["easy"]):
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "level": value}),
+                             [f"Tom: {self.CAT!r}: level must be easy, medium or hard, got {value!r}"], repr(value))
+        for value in wording.LEVELS:
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "level": value}), [], value)
+
+    def test_a_bad_keep_off_is_refused(self):
+        rule = Wording.RULE
+        def check(keep_off):
+            return self.check_one("Homer", {"riddle": self.DOH, "keep_off": keep_off})
+        for keep_off in ("Bart", [], None, {"Bart": True}):
+            self.assertEqual(check(keep_off),
+                             [f"Homer: {self.DOH!r}: keep_off must be a list of names; leave it out to keep no one off"],
+                             repr(keep_off))
+        for name, why in (("bart", ""), ("BART", ""), ("Maximilian", ""), (5, ""), (None, ""),
+                          ("Mary Ann", ": ' ' (U+0020) is not a letter A to Z"),
+                          ("\u0301Bart", ": it starts with an accent or other mark, U+0301, before any letter")):
+            self.assertEqual(check([name]), [f"Homer: {self.DOH!r}: keep_off holds {name!r}, which {rule}{why}"], repr(name))
+        for own in ("Homer", "Hom\u00e8r", "Home\u0300r"):
+            self.assertEqual(check([own]), [f"Homer: {self.DOH!r}: keep_off holds the riddle's own name"], ascii(own))
+        self.assertEqual(check(["Zo\u00eb", "Marge", "Zoe"]), [f"Homer: {self.DOH!r}: 'Zoe' is listed twice in keep_off"])
+        self.assertEqual(check(["McCoy", "Mccoy"]), [f"Homer: {self.DOH!r}: 'Mccoy' is listed twice in keep_off"])
+        self.assertEqual(check(["Marge", "Mona", "Zo\u00eb", "McCoy"]), [])
+
+    def test_who_is_text_or_left_out(self):
+        for value in (5, ["x"], None, False):
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "who": value}),
+                             [f"Tom: {self.CAT!r}: who must be text, got {value!r}"], repr(value))
+        for value in ("", "the grey cat in the cartoons with Jerry", "Zo\u00eb"):
+            self.assertEqual(self.check_one("Tom", {"riddle": self.CAT, "who": value}), [], value)
+
+    def test_today_s_riddle_checks_apply_to_an_object_s_text(self):
+        page = Wording.PAGE
+        for text, problem in (("the cat who chases Jerry.", "should have no outer spaces or full stop"),
+                              (" the cat who chases Jerry", "should have no outer spaces or full stop"),
+                              ("the cat who chases Jerry ", "should have no outer spaces or full stop"),
+                              ("the cat who\u200bchases Jerry", f"holds U+200B, {page}"),
+                              ("the cat called TOM", "gives the name away")):
+            self.assertEqual(self.check_one("Tom", {"riddle": text, "level": "hard"}), [f"Tom: {text!r} {problem}"], ascii(text))
+        # the fields come first, in their order, then the checks of the text
+        text = "Tom the cat."
+        self.assertEqual(self.check_one("Tom", {"who": 5, "level": "x", "riddle": text, "victim": 0}),
+                         [f"Tom: {text!r}: victim must be true or false, got 0",
+                          f"Tom: {text!r}: level must be easy, medium or hard, got 'x'",
+                          f"Tom: {text!r}: who must be text, got 5",
+                          f"Tom: {text!r} should have no outer spaces or full stop",
+                          f"Tom: {text!r} gives the name away"])
+
+    def test_a_plain_line_and_an_object_with_the_same_text_are_listed_twice(self):
+        check = wording.check_riddles
+        self.assertEqual(check({"Tom": [self.CAT, {"riddle": "the cat who  chases jerry"}]}),
+                         ["Tom: 'the cat who  chases jerry' is listed twice"])
+        self.assertEqual(check({"Tom": [{"riddle": self.CAT}, self.CAT]}), [f"Tom: {self.CAT!r} is listed twice"])
+        self.assertEqual(check({"Tom": [{"riddle": self.CAT}, {"riddle": self.CAT, "level": "hard"}]}),
+                         [f"Tom: {self.CAT!r} is listed twice"])
+        self.assertEqual(check({"Tom": [{"riddle": "the cartoon cat"}], "Felix": ["the cartoon cat"]}),
+                         ["'the cartoon cat' is under both Tom and Felix"])
+        self.assertEqual(check({"Tom": ["the cartoon cat"], "Felix": [{"riddle": "the Cartoon cat"}]}),
+                         ["'the Cartoon cat' is under both Tom and Felix"])
+
+    def test_a_riddle_given_as_a_record_is_not_a_riddle(self):
+        riddle = wording.Riddle("the cat")
+        self.assertEqual(wording.check_riddles({"Tom": [riddle]}), [f"Tom: {riddle!r} is not a riddle"])
+        self.assertTrue(repr(riddle).startswith("Riddle("), repr(riddle))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
