@@ -176,9 +176,9 @@ def load_riddles(path=None):
     With no `path` it reads the riddles.json shipped beside this file. Keys that
     start with "_" are notes for people: they are left out, whatever they hold
     and however often they come. A file that is not UTF-8 JSON, is nested too
-    deeply to read, is not an object, lists a name twice, writes a field twice in
-    one riddle, or fails check_riddles is refused with a ValueError that starts
-    with the file's name.
+    deeply to read or to check, is not an object, lists a name twice, writes a
+    field twice in one riddle, or fails check_riddles is refused with a
+    ValueError that starts with the file's name.
 
     Each riddle comes back as a record, a plain line as if it were an object with
     only its text. A field left out gets the record's default: every place, may be
@@ -189,6 +189,9 @@ def load_riddles(path=None):
     name is printed when one of the riddle's words, in plain letters, starts with a
     capital and is that name in any case: "Bart Simpson's father" and "BART's dad"
     print Bart, while "the jack of all trades" prints no Jack and "Kentucky" no Ken.
+    A word is a run of letters, and a capital a letter of category Lu or Lt, both by
+    Unicode 3.2's tables as _plain reads them, so a table gives the same records on
+    every Python.
     """
     path = Path(__file__).with_name("riddles.json") if path is None else Path(path)
     outermost, repeats = [], {}
@@ -210,13 +213,16 @@ def load_riddles(path=None):
     names = [name for name, _ in outermost if not name.startswith("_")]
     twice = [name for name in dict.fromkeys(names) if names.count(name) > 1]
     table = {name: lines for name, lines in data.items() if not name.startswith("_")}
-    problems = [f"{name} is listed twice" for name in twice] + check_riddles(table)
-    for name, lines in table.items():       # a dict in memory has no repeats, so check_riddles cannot see them
-        for entry in lines if isinstance(lines, list) else ():
-            if id(entry) in repeats:        # each object in repeats is kept alive there, so no other has its id
-                line = entry.get("riddle")
-                quoted = repr(line if isinstance(line, str) and line.strip() else entry)
-                problems += [f"{name}: {quoted} has {field!r} more than once" for field in repeats[id(entry)][1]]
+    try:            # a value nested deeply enough overflows when a message quotes it
+        problems = [f"{name} is listed twice" for name in twice] + check_riddles(table)
+        for name, lines in table.items():       # a dict in memory has no repeats, so check_riddles cannot see them
+            for entry in lines if isinstance(lines, list) else ():
+                if id(entry) in repeats:        # each object in repeats is kept alive there, so no other has its id
+                    line = entry.get("riddle")
+                    quoted = repr(line if isinstance(line, str) and line.strip() else entry)
+                    problems += [f"{name}: {quoted} has {field!r} more than once" for field in repeats[id(entry)][1]]
+    except RecursionError as error:
+        raise ValueError(f"{path.name}: the file is nested too deeply to check") from error
     if problems:
         raise ValueError(f"{path.name}: " + "; ".join(problems))
     names = {_plain(name).lower(): name for name in table}
@@ -233,11 +239,18 @@ def _record(entry, names):
         marks["places"] = tuple(entry["places"])
     keep_off = list(entry.get("keep_off", ()))
     held = {_plain(name).lower() for name in keep_off}
-    for word in re.findall(r"[^\W\d_]+", _plain(entry["riddle"])):
-        if word[0].isupper() and word.lower() in names and word.lower() not in held:
+    for word in _words(_plain(entry["riddle"])):
+        if unicodedata.ucd_3_2_0.category(word[0]) in ("Lu", "Lt") and word.lower() in names and word.lower() not in held:
             keep_off.append(names[word.lower()])
             held.add(word.lower())
     return Riddle(entry["riddle"], keep_off=tuple(keep_off), **marks)
+
+
+def _words(text):
+    """The runs of letters in the text, a letter being a character whose category in
+    Unicode 3.2's tables starts with L. A character that table does not hold, such as
+    a letter added to Unicode since, ends a word, on every Python alike."""
+    return "".join(char if unicodedata.ucd_3_2_0.category(char)[0] == "L" else " " for char in text).split()
 
 
 def check_riddles(table):

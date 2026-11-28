@@ -155,7 +155,9 @@ E287 and on came from the review of that change, and carry the tag `u9r`.
 The five AI reviewers found behaviour of the change that no test held, and a
 fault in how a riddle object was read. The AI coding assistant planted these
 against its own fixes: one for each case added to a test, and one for each
-check the fixes brought.
+check the fixes brought. E271, E274, E275 and E277 were written again for one
+of the fixes, which finds the words of a riddle by Unicode 3.2's tables: the
+words they replace changed.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -1080,7 +1082,7 @@ FAULTS = [
      [(W, 'marks["places"] = tuple(entry["places"])', 'marks["places"] = tuple(sorted(entry["places"]))')]),
     ("E271 [u9] a word in small letters that is a table name keeps that name off",
      RR + "test_a_word_in_small_letters_keeps_no_one_off",
-     [(W, 'if word[0].isupper() and word.lower() in names', 'if word.lower() in names')]),
+     [(W, 'if unicodedata.ucd_3_2_0.category(word[0]) in ("Lu", "Lt") and word.lower() in names', 'if word.lower() in names')]),
     ("E272 [u9] the names written to keep off come after the printed ones",
      RR + "test_written_names_come_first_and_each_name_once",
      [(W, 'return Riddle(entry["riddle"], keep_off=tuple(keep_off), **marks)',
@@ -1090,18 +1092,18 @@ FAULTS = [
      [(W, ' and word.lower() not in held:', ':')]),
     ("E274 [u9] printed names are looked for with their accents on, so a name with an accent is missed",
      RR + "test_a_printed_name_is_found_whatever_its_case_or_accents",
-     [(W, 'for word in re.findall(r"[^\\W\\d_]+", _plain(entry["riddle"])):', 'for word in re.findall(r"[^\\W\\d_]+", entry["riddle"]):')]),
+     [(W, 'for word in _words(_plain(entry["riddle"])):', 'for word in _words(entry["riddle"]):')]),
     ("E275 [u9] the riddle is split into words before its accents come off, so an accent written apart splits a name",
      RR + "test_a_printed_name_is_found_whatever_its_case_or_accents",
-     [(W, 'for word in re.findall(r"[^\\W\\d_]+", _plain(entry["riddle"])):',
-       'for word in [_plain(word) for word in re.findall(r"[^\\W\\d_]+", entry["riddle"])]:')]),
+     [(W, 'for word in _words(_plain(entry["riddle"])):',
+       'for word in [_plain(word) for word in _words(entry["riddle"])]:')]),
     ("E276 [u9] a printed name is kept off as the riddle writes it, not as the table spells it",
      RR + "test_a_printed_name_is_found_whatever_its_case_or_accents",
      [(W, 'keep_off.append(names[word.lower()])', 'keep_off.append(word)')]),
     ("E277 [u9] a printed name is kept off only for a riddle that has names written to keep off",
      RR + "test_the_shipped_table_keeps_off_the_eleven_printed_names",
-     [(W, 'for word in re.findall(r"[^\\W\\d_]+", _plain(entry["riddle"])):',
-       'for word in (re.findall(r"[^\\W\\d_]+", _plain(entry["riddle"])) if "keep_off" in entry else ()):')]),
+     [(W, 'for word in _words(_plain(entry["riddle"])):',
+       'for word in (_words(_plain(entry["riddle"])) if "keep_off" in entry else ()):')]),
     ("E278 [u9] a group counts when any one of its places counts, not every one",
      RR + "test_a_riddle_for_one_nation_does_not_count_for_the_union",
      [(W, 'return all(any(place == named', 'return any(any(place == named')]),
@@ -1163,4 +1165,11 @@ FAULTS = [
     ("E295 [u9r] a field written twice is reported with the whole object quoted, even when its riddle can be",
      RR + "test_a_field_written_twice_in_a_riddle_is_refused",
      [(W, 'quoted = repr(line if isinstance(line, str) and line.strip() else entry)', 'quoted = repr(entry)')]),
+    ("E296 [u9r] the words of a riddle are found by this Python's tables, so a letter newer than Unicode 3.2 joins a word",
+     RR + "test_printed_names_are_found_alike_on_every_python",
+     [(W, 'return "".join(char if unicodedata.ucd_3_2_0.category(char)[0] == "L" else " " for char in text).split()',
+       'return re.findall(r"[^\\W\\d_]+", text)')]),
+    ("E297 [u9r] a table nested too deeply to check escapes as a RecursionError, not refused by the file's name",
+     RR + "test_a_table_nested_too_deeply_to_check_is_refused_by_name",
+     [(W, '    except RecursionError as error:\n', '    except ZeroDivisionError as error:\n')]),
 ]

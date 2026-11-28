@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unicodedata
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from wrong_person import engine as e
@@ -1464,6 +1465,12 @@ class RiddleRecords(unittest.TestCase):
         table = self.load_text('{"_rules": [{"a": 1, "a": 2}], "_x": {"b": 1, "b": 2}, "Tom": [{"riddle": %s}]}' % cat)
         self.assertEqual(table, {"Tom": [wording.Riddle(self.CAT)]})
 
+    def test_a_table_nested_too_deeply_to_check_is_refused_by_name(self):
+        # how deep a value must be to overflow in the check depends on the Python and the computer, so it is made to
+        with unittest.mock.patch.object(wording, "check_riddles", side_effect=RecursionError("too deep")):
+            message = self.refusal('{"Tom": ["the cat"]}')
+        self.assertEqual(message, "mine.json: the file is nested too deeply to check")
+
     def load_text(self, text):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "mine.json")
@@ -1522,6 +1529,17 @@ class RiddleRecords(unittest.TestCase):
         # an accent written apart inside the name does not split it in two
         table = self.load({"Tom": ["Rene\u0301e's brother"], "Ren\u00e9e": ["the star of a diary film"]})
         self.assertEqual(table["Tom"][0].keep_off, ("Ren\u00e9e",))
+
+    def test_printed_names_are_found_alike_on_every_python(self):
+        # U+A7C1 is a letter since Unicode 14 and unassigned in Unicode 3.2, so it ends the word on every Python
+        table = self.load({"Homer": ["Bart\ua7c1 Simpson's father"], "Bart": ["the boy with the slingshot"]})
+        self.assertEqual(table["Homer"][0].keep_off, ("Bart",))
+        # U+0221 is a letter since Unicode 4.0, so every Python's own tables would join it to the name
+        table = self.load({"Homer": ["Bart\u0221 Simpson's father"], "Bart": ["the boy with the slingshot"]})
+        self.assertEqual(table["Homer"][0].keep_off, ("Bart",))
+        # a capital with its accent on starts a printed name, and one in small letters does not
+        table = self.load({"Tom": ["\u00c9mile's twin", "the twin of \u00e9mile"], "\u00c9mile": ["the boy in the book"]})
+        self.assertEqual([riddle.keep_off for riddle in table["Tom"]], [("\u00c9mile",), ()])
 
     def test_a_word_in_small_letters_keeps_no_one_off(self):
         table = self.load({"Bob": ["the jack of all trades", "the man who knows jack"], "Jack": ["the lad with the beanstalk"]})
