@@ -1237,5 +1237,34 @@ class Wording(unittest.TestCase):
                 wording.load_riddles(Path(folder, "missing.json"))
 
 
+class RiddleRecords(unittest.TestCase):
+    """A riddle as an object with its places, victim mark, level, names kept off and a note on who it means (#15)."""
+
+    def test_each_group_holds_known_places_only_and_each_once(self):
+        for group, places in wording.GROUPS.items():
+            self.assertLessEqual(set(places), wording.PLACES, group)
+            self.assertFalse(set(places) & wording.GROUPS.keys(), group)
+            self.assertEqual(len(set(places)), len(places), group)
+        self.assertFalse(wording.PLACES & wording.GROUPS.keys())
+
+    def test_the_union_and_great_britain_are_the_nations_they_should_be(self):
+        self.assertEqual(wording.PLACES, {"US", "GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR"})
+        self.assertEqual(wording.GROUPS, {"GB": ("GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR"),
+                                          "GB-GBN": ("GB-ENG", "GB-SCT", "GB-WLS")})
+        self.assertEqual(wording.LEVELS, ("easy", "medium", "hard"))
+        self.assertEqual(wording.FIELDS, ("riddle", "places", "victim", "level", "keep_off", "who"))
+
+    def test_a_record_has_the_designs_defaults(self):
+        self.assertEqual(wording.Riddle("x"), wording.Riddle("x", None, True, "easy", (), None))
+        self.assertEqual([field.name for field in dataclasses.fields(wording.Riddle)],
+                         ["text", "places", "victim", "level", "keep_off", "who"])
+
+    def test_a_record_cannot_be_changed(self):
+        riddle = wording.Riddle("the cat who chases Jerry")
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            riddle.text = "the dog"
+        self.assertEqual(riddle.text, "the cat who chases Jerry")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -8,6 +8,7 @@ never the name. Change any sentence here and no logic moves.
 import json
 import re
 import unicodedata
+from dataclasses import dataclass
 from pathlib import Path
 
 PATTERN = {"contains": "containing", "begins": "beginning with", "ends": "ending in"}
@@ -33,6 +34,34 @@ _UNPRINTED = frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})
 # kept for more of them. A format character inside these ranges is refused on both counts.
 _IGNORABLE = ((0x034F, 0x034F), (0x115F, 0x1160), (0x17B4, 0x17B5), (0x180B, 0x180F), (0x2065, 0x2065),
               (0x3164, 0x3164), (0xFE00, 0xFE0F), (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8), (0xE0000, 0xE0FFF))
+
+# Where a riddle counts (#15), as ISO 3166 codes. A riddle may name places, groups or both.
+# A group holds places only, never another group, and no place twice; a place may be in any
+# number of groups. More places are added here as data.
+PLACES = frozenset({"US", "GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR"})
+GROUPS = {"GB": ("GB-ENG", "GB-SCT", "GB-WLS", "GB-NIR"),     # the United Kingdom
+          "GB-GBN": ("GB-ENG", "GB-SCT", "GB-WLS")}           # Great Britain
+LEVELS = ("easy", "medium", "hard")
+FIELDS = ("riddle", "places", "victim", "level", "keep_off", "who")     # what a riddle written as an object may hold
+
+
+@dataclass(frozen=True)
+class Riddle:
+    """One riddle as load_riddles gives it, with every mark filled in.
+
+    `text` is what is printed. `places` holds the codes the table gave, as written, or
+    None when the riddle counts everywhere. `victim` says whether the riddle may name the
+    victim. `level` is "easy", "medium" or "hard". `keep_off` holds the first names that
+    must not be on a board where the riddle is used. `who` is a note for people on who
+    the riddle means, or None. A record cannot be changed once made.
+    """
+    text: str
+    places: tuple[str, ...] | None = None
+    victim: bool = True
+    level: str = "easy"
+    keep_off: tuple[str, ...] = ()
+    who: str | None = None
+
 
 RULES_TEXT = ("Every clue is true of the killer. A list of letters means any one of them. "
               "A name contains a letter wherever it appears, its capital first letter included. "
