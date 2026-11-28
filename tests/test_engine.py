@@ -1446,6 +1446,9 @@ class RiddleRecords(unittest.TestCase):
         # and the table's own spelling is kept, whichever way the table writes it
         table = self.load({"Tom": ["Zo\u00eb's twin"], "Zoe\u0308": ["the heroine of a French novel"]})
         self.assertEqual(table["Tom"][0].keep_off, ("Zoe\u0308",))
+        # an accent written apart inside the name does not split it in two
+        table = self.load({"Tom": ["Rene\u0301e's brother"], "Ren\u00e9e": ["the star of a diary film"]})
+        self.assertEqual(table["Tom"][0].keep_off, ("Ren\u00e9e",))
 
     def test_a_word_in_small_letters_keeps_no_one_off(self):
         table = self.load({"Bob": ["the jack of all trades", "the man who knows jack"], "Jack": ["the lad with the beanstalk"]})
