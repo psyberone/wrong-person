@@ -1295,7 +1295,11 @@ class RiddleRecords(unittest.TestCase):
                           f"Tom: {self.CAT!r} has 'who ', which is not a field of a riddle"])
         for value in (5, None, "", "  ", ["the cat"]):
             self.assertEqual(self.check_one("Tom", {"riddle": value}), [f"Tom: {value!r} is not a riddle"], repr(value))
-        # with no riddle to quote, a problem with another field quotes the whole entry
+        # with no riddle to quote, a problem with another field quotes the whole entry; nor is a missing riddle
+        # counted as a riddle, so two objects without one are not the same riddle twice
+        self.assertEqual(wording.check_riddles({"Tom": [{"level": "x"}, {}]}),
+                         ["Tom: {'level': 'x'} has no riddle", "Tom: {'level': 'x'}: level must be easy, medium or hard, got 'x'",
+                          "Tom: {} has no riddle"])
         entry = {"riddle": 5, "level": "x", "Places": []}
         self.assertEqual(self.check_one("Tom", entry),
                          ["Tom: 5 is not a riddle", f"Tom: {entry!r} has 'Places', which is not a field of a riddle",
@@ -1346,6 +1350,10 @@ class RiddleRecords(unittest.TestCase):
                           ("Mary Ann", ": ' ' (U+0020) is not a letter A to Z"),
                           ("\u0301Bart", ": it starts with an accent or other mark, U+0301, before any letter")):
             self.assertEqual(check([name]), [f"Homer: {self.DOH!r}: keep_off holds {name!r}, which {rule}{why}"], repr(name))
+        # a name that is not text does not stop the check of the names after it
+        self.assertEqual(check([5, "bart", None]), [f"Homer: {self.DOH!r}: keep_off holds 5, which {rule}",
+                                                     f"Homer: {self.DOH!r}: keep_off holds 'bart', which {rule}",
+                                                     f"Homer: {self.DOH!r}: keep_off holds None, which {rule}"])
         for own in ("Homer", "Hom\u00e8r", "Home\u0300r"):
             self.assertEqual(check([own]), [f"Homer: {self.DOH!r}: keep_off holds the riddle's own name"], ascii(own))
         self.assertEqual(check(["Zo\u00eb", "Marge", "Zoe"]), [f"Homer: {self.DOH!r}: 'Zoe' is listed twice in keep_off"])

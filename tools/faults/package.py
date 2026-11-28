@@ -140,15 +140,16 @@ now also tries a tab and a hidden character in the name, and a table where a
 refused twin comes first and the riddles hold each problem the check reports
 for a riddle, so each is killed by that test.
 
-E248 to E284 came with the change that lets a riddle in the table be written
+E248 to E286 came with the change that lets a riddle in the table be written
 as an object, with the places it counts in, whether it may name the victim,
 its level, the names to keep off a board where it is used and a note on who it
 means, and that reads each riddle as a record (issue #15). They carry the tag
 `u9` for the work unit. The AI coding assistant planted them against its own
 change, one or more for each thing the check now refuses, for what the reader
-fills in and keeps off by itself, and for what counts for a place. E074 and
-E077 were written again for the same change: the words they replace came to
-stand in two places.
+fills in and keeps off by itself, and for what counts for a place. E285 and
+E286 are two that `mutmut` made first and that no test caught until a case was
+added for each. E074 and E077 were written again for the same change: the words
+they replace came to stand in two places.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -1120,4 +1121,11 @@ FAULTS = [
      [(J, '  "keep_off: a list of first names that must not be on a board where the riddle is used. '
           'A name from this table that the riddle prints, starting with a capital, is kept off by itself; '
           'list only the names the table lacks.",\n', '')]),
+    ("E285 [u9] an object with no riddle is checked as the riddle '', so its fields' problems quote ''",
+     RR + "test_an_object_without_a_riddle_or_with_a_stray_field_is_refused",
+     [(W, '                problems.append(f"{name}: {entry!r} has no riddle")\n                line = None\n',
+       '                problems.append(f"{name}: {entry!r} has no riddle")\n                line = ""\n')]),
+    ("E286 [u9] a name to keep off that is not text stops the check of the names after it",
+     RR + "test_a_bad_keep_off_is_refused",
+     [(W, 'which {_NAME_RULE}")\n                    continue\n', 'which {_NAME_RULE}")\n                    break\n')]),
 ]
