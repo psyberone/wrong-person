@@ -176,8 +176,9 @@ def load_riddles(path=None):
     With no `path` it reads the riddles.json shipped beside this file. Keys that
     start with "_" are notes for people: they are left out, whatever they hold
     and however often they come. A file that is not UTF-8 JSON, is nested too
-    deeply to read, is not an object, lists a name twice, or fails check_riddles
-    is refused with a ValueError that starts with the file's name.
+    deeply to read, is not an object, lists a name twice, writes a field twice in
+    one riddle, or fails check_riddles is refused with a ValueError that starts
+    with the file's name.
 
     Each riddle comes back as a record, a plain line as if it were an object with
     only its text. A field left out gets the record's default: every place, may be
@@ -190,11 +191,15 @@ def load_riddles(path=None):
     print Bart, while "the jack of all trades" prints no Jack and "Kentucky" no Ken.
     """
     path = Path(__file__).with_name("riddles.json") if path is None else Path(path)
-    outermost = []
+    outermost, repeats = [], {}
 
     def remember(pairs):
         outermost[:] = pairs        # an object ends after all it holds, so the last one seen is the file's own
-        return dict(pairs)
+        made = dict(pairs)
+        if len(made) < len(pairs):  # a key written more than once: kept with the object, so its id stays its own
+            keys = [key for key, _ in pairs]
+            repeats[id(made)] = (made, [key for key in made if keys.count(key) > 1])
+        return made
 
     try:
         data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=remember)
@@ -206,6 +211,12 @@ def load_riddles(path=None):
     twice = [name for name in dict.fromkeys(names) if names.count(name) > 1]
     table = {name: lines for name, lines in data.items() if not name.startswith("_")}
     problems = [f"{name} is listed twice" for name in twice] + check_riddles(table)
+    for name, lines in table.items():       # a dict in memory has no repeats, so check_riddles cannot see them
+        for entry in lines if isinstance(lines, list) else ():
+            if id(entry) in repeats:        # each object in repeats is kept alive there, so no other has its id
+                line = entry.get("riddle")
+                quoted = repr(line if isinstance(line, str) and line.strip() else entry)
+                problems += [f"{name}: {quoted} has {field!r} more than once" for field in repeats[id(entry)][1]]
     if problems:
         raise ValueError(f"{path.name}: " + "; ".join(problems))
     names = {_plain(name).lower(): name for name in table}

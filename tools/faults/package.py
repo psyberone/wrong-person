@@ -1154,4 +1154,13 @@ FAULTS = [
     ("E292 [u9r] the riddle quoted in a field's message is not escaped",
      RR + "test_what_the_new_messages_quote_is_escaped",
      [(W, 'quoted = repr(entry if line is None else line)', 'quoted = str(entry if line is None else line)')]),
+    ("E293 [u9r] a field written twice in a riddle object is not seen, and the last value is taken",
+     RR + "test_a_field_written_twice_in_a_riddle_is_refused",
+     [(W, 'if len(made) < len(pairs):', 'if False:')]),
+    ("E294 [u9r] a field written three times is reported twice",
+     RR + "test_a_field_written_twice_in_a_riddle_is_refused",
+     [(W, '[key for key in made if keys.count(key) > 1]', '[key for key in keys[1:] if keys.count(key) > 1]')]),
+    ("E295 [u9r] a field written twice is reported with the whole object quoted, even when its riddle can be",
+     RR + "test_a_field_written_twice_in_a_riddle_is_refused",
+     [(W, 'quoted = repr(line if isinstance(line, str) and line.strip() else entry)', 'quoted = repr(entry)')]),
 ]

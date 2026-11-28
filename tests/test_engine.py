@@ -1432,6 +1432,44 @@ class RiddleRecords(unittest.TestCase):
             path.write_text(json.dumps(table), encoding="utf-8")
             return wording.load_riddles(path)
 
+    def refusal(self, text):
+        """The ValueError load_riddles gives for a file holding `text`, as written."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            path.write_text(text, encoding="utf-8")
+            with self.assertRaises(ValueError) as refused:
+                wording.load_riddles(path)
+            return str(refused.exception)
+
+    def test_a_field_written_twice_in_a_riddle_is_refused(self):
+        cat = json.dumps(self.CAT)
+        self.assertEqual(self.refusal('{"Tom": [{"riddle": %s, "victim": false, "victim": true}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'victim' more than once")
+        # the first value is not checked, so it is not let pass unseen either
+        self.assertEqual(self.refusal('{"Tom": [{"riddle": %s, "places": ["UK"], "places": ["US"]}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'places' more than once")
+        self.assertEqual(self.refusal('{"Tom": [{"riddle": "the dog", "riddle": %s}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'riddle' more than once")
+        # three times is one report; two fields each written twice are reported in the order they come
+        self.assertEqual(self.refusal('{"Tom": [{"riddle": %s, "level": "easy", "level": "hard", "level": "easy"}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'level' more than once")
+        self.assertEqual(self.refusal('{"Tom": ["the dog", {"riddle": %s, "who": "a", "level": "easy", '
+                                      '"level": "hard", "who": "b"}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'who' more than once; "
+                         f"Tom: {self.CAT!r} has 'level' more than once")
+        # with no riddle to quote, the object is quoted, as in the other messages; it comes after what the check finds
+        self.assertEqual(self.refusal('{"Tom": [{"riddle": 5, "victim": true, "victim": false}]}'),
+                         "mine.json: Tom: 5 is not a riddle; Tom: {'riddle': 5, 'victim': False} has 'victim' more than once")
+        # a note may still repeat a key, inside an object or not
+        table = self.load_text('{"_rules": [{"a": 1, "a": 2}], "_x": {"b": 1, "b": 2}, "Tom": [{"riddle": %s}]}' % cat)
+        self.assertEqual(table, {"Tom": [wording.Riddle(self.CAT)]})
+
+    def load_text(self, text):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            path.write_text(text, encoding="utf-8")
+            return wording.load_riddles(path)
+
     def test_a_plain_line_is_a_riddle_with_every_default(self):
         self.assertEqual(self.load({"Tom": ["the cat"]}), {"Tom": [wording.Riddle("the cat", None, True, "easy", (), None)]})
         self.assertEqual(self.load({"Tom": [{"riddle": "the cat"}]}),
