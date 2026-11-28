@@ -171,13 +171,23 @@ def arrest(riddle):
 
 
 def load_riddles(path=None):
-    """Read a riddle table -> {name: [riddle, ...]}.
+    """Read a riddle table -> {name: [Riddle, ...]}.
 
     With no `path` it reads the riddles.json shipped beside this file. Keys that
     start with "_" are notes for people: they are left out, whatever they hold
     and however often they come. A file that is not UTF-8 JSON, is nested too
     deeply to read, is not an object, lists a name twice, or fails check_riddles
     is refused with a ValueError that starts with the file's name.
+
+    Each riddle comes back as a record, a plain line as if it were an object with
+    only its text. A field left out gets the record's default: every place, may be
+    the victim, easy, no names written to keep off, and no note on who it means.
+    The record's `keep_off` holds the names written for the riddle, as written, then
+    each name from the table that the riddle prints, as the table spells it, in the
+    order the riddle prints them, leaving out one already there in plain letters. A
+    name is printed when one of the riddle's words, in plain letters, starts with a
+    capital and is that name in any case: "Bart Simpson's father" and "BART's dad"
+    print Bart, while "the jack of all trades" prints no Jack and "Kentucky" no Ken.
     """
     path = Path(__file__).with_name("riddles.json") if path is None else Path(path)
     outermost = []
@@ -198,7 +208,25 @@ def load_riddles(path=None):
     problems = [f"{name} is listed twice" for name in twice] + check_riddles(table)
     if problems:
         raise ValueError(f"{path.name}: " + "; ".join(problems))
-    return table
+    names = {_plain(name).lower(): name for name in table}
+    return {name: [_record(entry, names) for entry in lines] for name, lines in table.items()}
+
+
+def _record(entry, names):
+    """The record of one riddle as a table that check_riddles passed writes it: a plain
+    line or an object. `names` maps each of the table's names, in plain letters and
+    small letters, to the name as the table spells it."""
+    entry = entry if isinstance(entry, dict) else {"riddle": entry}
+    marks = {field: entry[field] for field in ("victim", "level", "who") if field in entry}
+    if "places" in entry:
+        marks["places"] = tuple(entry["places"])
+    keep_off = list(entry.get("keep_off", ()))
+    held = {_plain(name).lower() for name in keep_off}
+    for word in re.findall(r"[^\W\d_]+", _plain(entry["riddle"])):
+        if word[0].isupper() and word.lower() in names and word.lower() not in held:
+            keep_off.append(names[word.lower()])
+            held.add(word.lower())
+    return Riddle(entry["riddle"], keep_off=tuple(keep_off), **marks)
 
 
 def check_riddles(table):

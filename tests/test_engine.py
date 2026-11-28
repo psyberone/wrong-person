@@ -818,9 +818,11 @@ class Wording(unittest.TestCase):
             seen.add(text)
 
     def test_the_riddle_table_is_clean(self):
-        table = wording.load_riddles()
-        self.assertEqual(wording.check_riddles(table), [])
-        self.assertIn("the singer of Thriller", table["Michael"])
+        path = Path(wording.__file__).with_name("riddles.json")
+        entries = {name: lines for name, lines in json.loads(path.read_text(encoding="utf-8")).items()
+                   if not name.startswith("_")}
+        self.assertEqual(wording.check_riddles(entries), [])
+        self.assertIn("the singer of Thriller", [riddle.text for riddle in wording.load_riddles()["Michael"]])
 
     def test_the_riddle_table_quotes_sentences_the_code_prints(self):
         path = Path(wording.__file__).with_name("riddles.json")
@@ -1122,14 +1124,15 @@ class Wording(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "mine.json")
             path.write_text('{"_note": "skipped", "Tom": ["the cat who chases Jerry"]}', encoding="utf-8")
-            self.assertEqual(wording.load_riddles(path), {"Tom": ["the cat who chases Jerry"]})
+            self.assertEqual(wording.load_riddles(path), {"Tom": [wording.Riddle("the cat who chases Jerry")]})
 
     def test_a_riddle_file_may_hold_letters_outside_ascii(self):
         table = {"Zo\u00eb": ["the heroine of a French novel"], "Ren\u00e9e": ["the star of Bridget Jones\u2019s Diary"]}
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "mine.json")
             path.write_bytes(json.dumps(table, ensure_ascii=False).encode("utf-8"))
-            self.assertEqual(wording.load_riddles(path), table)
+            self.assertEqual(wording.load_riddles(path),
+                             {name: [wording.Riddle(line) for line in lines] for name, lines in table.items()})
 
     def test_a_riddle_file_with_a_line_break_in_a_riddle_is_refused(self):
         line = "the cat who\nchases Jerry"
@@ -1173,7 +1176,8 @@ class Wording(unittest.TestCase):
                 self.assertEqual(str(refused.exception), message)
 
     def test_notes_may_repeat_and_what_they_hold_is_not_read(self):
-        table = {"Carrie": ["the prom queen in the film of 1976"], "Nancy": ["the teenage detective Miss Drew"]}
+        table = {"Carrie": [wording.Riddle("the prom queen in the film of 1976")],
+                 "Nancy": [wording.Riddle("the teenage detective Miss Drew")]}
         files = ('{"_": "horror", "Carrie": ["the prom queen in the film of 1976"], '
                  '"_": "detectives", "Nancy": ["the teenage detective Miss Drew"]}',
                  '{"_about": {"by": "me", "by": "you", "Nancy": 1, "Nancy": 2}, '
@@ -1388,6 +1392,84 @@ class RiddleRecords(unittest.TestCase):
         riddle = wording.Riddle("the cat")
         self.assertEqual(wording.check_riddles({"Tom": [riddle]}), [f"Tom: {riddle!r} is not a riddle"])
         self.assertTrue(repr(riddle).startswith("Riddle("), repr(riddle))
+
+    # ---- the records load_riddles gives
+    def load(self, table):
+        """The table written to a file of its own, and read back."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "mine.json")
+            path.write_text(json.dumps(table), encoding="utf-8")
+            return wording.load_riddles(path)
+
+    def test_a_plain_line_is_a_riddle_with_every_default(self):
+        self.assertEqual(self.load({"Tom": ["the cat"]}), {"Tom": [wording.Riddle("the cat", None, True, "easy", (), None)]})
+        self.assertEqual(self.load({"Tom": [{"riddle": "the cat"}]}),
+                         {"Tom": [wording.Riddle("the cat", None, True, "easy", (), None)]})
+
+    def test_an_object_is_read_with_every_mark(self):
+        who = "the father in the cartoon"
+        whole = {"riddle": self.DOH, "places": ["US", "GB"], "victim": False, "level": "medium",
+                 "keep_off": ["Marge"], "who": who}
+        self.assertEqual(self.load({"Homer": [whole]})["Homer"],
+                         [wording.Riddle(self.DOH, ("US", "GB"), False, "medium", ("Marge",), who)])
+        # the codes as written, in their order, a group and a place in it both kept
+        self.assertEqual(self.load({"Homer": [{"riddle": self.DOH, "places": ["GB-SCT", "GB"], "level": "hard"}]})["Homer"],
+                         [wording.Riddle(self.DOH, ("GB-SCT", "GB"), True, "hard", (), None)])
+        self.assertEqual(self.load({"Homer": [{"riddle": self.DOH, "victim": True, "who": ""}]})["Homer"],
+                         [wording.Riddle(self.DOH, None, True, "easy", (), "")])
+
+    def test_a_printed_table_name_is_kept_off_by_itself(self):
+        table = self.load({"Homer": ["Bart Simpson's father", {"riddle": "the man Bart calls Dad", "level": "hard"}],
+                           "Bart": ["the boy with the slingshot"]})
+        self.assertEqual([riddle.keep_off for riddle in table["Homer"]], [("Bart",), ("Bart",)])
+        self.assertEqual(table["Bart"][0].keep_off, ())
+        # in the order the riddle prints them, each once
+        table = self.load({"Ann": ["the sister Tom and Bob and Tom share"], "Tom": ["the cat"], "Bob": ["the builder"]})
+        self.assertEqual(table["Ann"][0].keep_off, ("Tom", "Bob"))
+
+    def test_written_names_come_first_and_each_name_once(self):
+        lisa = {"Lisa": ["the Simpson who plays the saxophone"]}
+        mona = "the painter of the Mona Lisa"
+        for written, kept in ((["Mona", "Lisa"], ("Mona", "Lisa")), (["Mona"], ("Mona", "Lisa")),
+                              (["Lisa", "Mona"], ("Lisa", "Mona")), (["Lisa"], ("Lisa",))):
+            table = self.load({"Leonardo": [{"riddle": mona, "keep_off": written}], **lisa})
+            self.assertEqual(table["Leonardo"][0].keep_off, kept, written)
+        # a written name is the same as a printed one in plain letters, in any case: it is kept as written
+        table = self.load({"Tom": [{"riddle": "the twin of Zo\u00eb", "keep_off": ["Zoe"]}],
+                           "Zo\u00eb": ["the heroine of a French novel"]})
+        self.assertEqual(table["Tom"][0].keep_off, ("Zoe",))
+
+    def test_a_printed_name_is_found_whatever_its_case_or_accents(self):
+        lines = ["ZOE's twin", "Zo\u00eb's twin brother", "Zoe\u0308's twin sister", "Zoe's twin cousin", "the twin of ZO\u00cb"]
+        table = self.load({"Tom": lines, "Zo\u00eb": ["the heroine of a French novel"]})
+        self.assertEqual([riddle.keep_off for riddle in table["Tom"]], [("Zo\u00eb",)] * len(lines))
+        # and the table's own spelling is kept, whichever way the table writes it
+        table = self.load({"Tom": ["Zo\u00eb's twin"], "Zoe\u0308": ["the heroine of a French novel"]})
+        self.assertEqual(table["Tom"][0].keep_off, ("Zoe\u0308",))
+
+    def test_a_word_in_small_letters_keeps_no_one_off(self):
+        table = self.load({"Bob": ["the jack of all trades", "the man who knows jack"], "Jack": ["the lad with the beanstalk"]})
+        self.assertEqual([riddle.keep_off for riddle in table["Bob"]], [(), ()])
+        self.assertEqual(self.load({"Bob": ["the man Jack knows"], "Jack": ["the lad with the beanstalk"]})["Bob"][0].keep_off,
+                         ("Jack",))
+
+    def test_a_name_inside_a_longer_word_keeps_no_one_off(self):
+        table = self.load({"Sanders": ["the Kentucky colonel"], "Ken": ["Barbie's boyfriend"]})
+        self.assertEqual(table["Sanders"][0].keep_off, ())
+        table = self.load({"Sanders": ["the Kentucky colonel Ken knows"], "Ken": ["Barbie's boyfriend"]})
+        self.assertEqual(table["Sanders"][0].keep_off, ("Ken",))
+
+    def test_the_shipped_table_keeps_off_the_eleven_printed_names(self):
+        printed = [("Barbie", "Ken"), ("Bart", "Homer"), ("Ernie", "Bert"), ("Fred", "Wilma"), ("Homer", "Bart"),
+                   ("Jack", "Rose"), ("Jerry", "Tom"), ("Ken", "Barbie"), ("Leonardo", "Lisa"), ("Romeo", "Juliet"),
+                   ("Tom", "Jerry")]
+        table = wording.load_riddles()
+        kept = sorted((name, riddle.keep_off) for name, riddles in table.items() for riddle in riddles if riddle.keep_off)
+        self.assertEqual(kept, [(owner, (name,)) for owner, name in printed])
+        # no riddle in the table carries a mark yet: each is its text with the defaults, and what it prints
+        for name, riddles in table.items():
+            for riddle in riddles:
+                self.assertEqual(riddle, wording.Riddle(riddle.text, None, True, "easy", riddle.keep_off, None), name)
 
 
 if __name__ == "__main__":
