@@ -50,4 +50,5 @@ also_copy = [
     ".github/",          # tests/test_workflow.py reads the workflow,
     "CONTRIBUTING.md",   # this page,
     "pyproject.toml",    # and this file
+    "REVIEW.md",         # tests/test_review.py reads the page
 ]

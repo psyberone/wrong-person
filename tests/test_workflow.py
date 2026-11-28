@@ -68,7 +68,7 @@ COMMANDS = {
                 'python -m venv "$RUNNER_TEMP/clean"\n'
                 '"$RUNNER_TEMP/clean/bin/python" -m pip install --no-index --no-deps "$RUNNER_TEMP"/dist/wrong_person-*.whl\n',
                 'mkdir "$RUNNER_TEMP/apart"\n'
-                'cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$RUNNER_TEMP/apart/"\n'
+                'cp -R tests tools .github README.md CONTRIBUTING.md REVIEW.md pyproject.toml "$RUNNER_TEMP/apart/"\n'
                 'cd "$RUNNER_TEMP/apart"\n'
                 "test ! -e src\n"
                 "\"$RUNNER_TEMP/clean/bin/python\" - <<'PY'\n"
@@ -524,9 +524,9 @@ class Floors(unittest.TestCase):
 
     def test_the_tests_that_read_these_files_can_find_them_wherever_they_are_run(self):
         """mutmut runs the tests in a copy, and the package job runs them away from the source. Both must take these files along."""
-        for needed in ('"README.md"', '"CONTRIBUTING.md"', '"pyproject.toml"', '"tools/"', '".github/"'):
+        for needed in ('"README.md"', '"CONTRIBUTING.md"', '"REVIEW.md"', '"pyproject.toml"', '"tools/"', '".github/"'):
             self.assertIn(needed, " ".join(table(self.settings, "tool.mutmut")), needed)
-        self.assertIn('cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$RUNNER_TEMP/apart/"\n', COMMANDS["package"][3])
+        self.assertIn('cp -R tests tools .github README.md CONTRIBUTING.md REVIEW.md pyproject.toml "$RUNNER_TEMP/apart/"\n', COMMANDS["package"][3])
 
     def test_the_page_has_a_row_for_every_job(self):
         page = CONTRIBUTING.read_text(encoding="utf-8")
@@ -567,6 +567,18 @@ class Floors(unittest.TestCase):
         self.assertEqual(here.count("python3 "), 2)
         block = '(\nset -e\nrm -rf build src/wrong_person.egg-info\ncheck="$(mktemp -d)"\n' + here + ")\n```\n"
         self.assertIn(block, CONTRIBUTING.read_text(encoding="utf-8"))
+
+    def test_the_page_gives_the_mutation_jobs_own_commands_after_clearing_mutmuts_copy(self):
+        """Every line the job runs after its install, in its order and with `python3` for the runner's `python`, after an `rm`.
+
+        GitHub starts from a fresh copy, and a contributor's folder does not. mutmut copies the source, the tests and what
+        `also_copy` lists into mutants/, and never takes a file out of it, so a file taken out of the repository stays in
+        that copy, and a test that looks at every file there fails on a repository that is right.
+        """
+        the_jobs = "".join(step if step.endswith("\n") else step + "\n" for step in COMMANDS["mutation"][1:])
+        here = re.sub(r"(?m)^python ", "python3 ", the_jobs)
+        self.assertEqual(here.count("python3 "), 3)
+        self.assertIn("\nrm -rf mutants\n" + here + "\n", CONTRIBUTING.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

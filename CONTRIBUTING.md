@@ -62,7 +62,10 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 PYTHONPATH=src python3 -m coverage run -m unittest discover -s tests
 python3 -m coverage report
 
-# mutation, which fails under 80% killed (writes a mutants/ folder, ignored by git)
+# mutation, which fails under 80% killed: it runs the tests in a copy, the
+# mutants/ folder (git ignores it), and never takes a file out of that copy, so
+# a file you have removed would still be tested there; the rm starts it afresh
+rm -rf mutants
 python3 -m mutmut run
 python3 -m mutmut export-cicd-stats
 python3 tools/mutation_floor.py
@@ -81,7 +84,7 @@ python3 -m build --wheel --outdir "$check/dist"
 python3 -m venv "$check/clean"
 "$check/clean/bin/python" -m pip install --no-index --no-deps "$check"/dist/wrong_person-*.whl
 mkdir "$check/apart"
-cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$check/apart/"
+cp -R tests tools .github README.md CONTRIBUTING.md REVIEW.md pyproject.toml "$check/apart/"
 cd "$check/apart"
 test ! -e src
 "$check/clean/bin/python" - <<'PY'
@@ -121,7 +124,7 @@ the package and for everything `mutmut` does not reach.
 | List | Where its faults are planted |
 | --- | --- |
 | `package.py` | The package, its riddle table and the README's example |
-| `checks.py` | The scan, the mutation floor, the workflow, `pyproject.toml` and this page |
+| `checks.py` | The scan, the mutation floor, the workflow, `pyproject.toml`, this page, and `REVIEW.md` with its tests |
 | `runner.py` | The script that plants the faults; for one fault a list itself, and for two the script's own tests |
 
 Where they came from: every one was planted by an AI. AI reviewers planted
@@ -307,9 +310,15 @@ For the maintainer:
 - **The reviewers are AI agents.** Each works in its own copy of the exact
   commit, and none of them wrote the change. Their findings are graded, and the
   pull request records what was found and what was done about it.
-- After a fix, the same reviewers answer a closed question: is each finding
-  fixed, and did the fix break anything. It is not a new hunt.
+- One reviewer for each gate stays with the change until it merges. After a
+  fix, only the reviewers whose gate has not passed yet look at it, and only at
+  the findings it says it fixes and at what the fix itself changed, not at the
+  whole change again. Once every gate has passed, or all that is left is one
+  small point for the owner to decide, each reviewer whose gate passed earlier
+  reads the commits made since then, and only those.
 - The owner merges, and only once the review is clear.
+- [REVIEW.md](REVIEW.md) says what the reviewers look for in this project in
+  particular, and lists every way data comes in and goes out.
 
 ## The private word list
 

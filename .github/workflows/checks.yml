@@ -94,7 +94,7 @@ jobs:
       - name: Run the tests against the installed wheel, away from the source
         run: |
           mkdir "$RUNNER_TEMP/apart"
-          cp -R tests tools .github README.md CONTRIBUTING.md pyproject.toml "$RUNNER_TEMP/apart/"
+          cp -R tests tools .github README.md CONTRIBUTING.md REVIEW.md pyproject.toml "$RUNNER_TEMP/apart/"
           cd "$RUNNER_TEMP/apart"
           test ! -e src
           "$RUNNER_TEMP/clean/bin/python" - <<'PY'
