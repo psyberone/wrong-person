@@ -5,7 +5,13 @@
   "A riddle must point to exactly one first name, and must not contain that name.",
   "Keep it REALLY easy: the answer should be in the first one or two search results for the riddle.",
   "Use the name everyone uses (Ringo, not Richard). No full stop at the end.",
-  "The same riddle must never appear under two names."
+  "The same riddle must never appear under two names.",
+  "A riddle is a plain line, or an object that holds it as riddle along with any of places, victim, level, keep_off and who. A plain line is the same as an object holding only its riddle.",
+  "places: a list of codes for where the riddle is common knowledge. The places are US, GB-ENG (England), GB-SCT (Scotland), GB-WLS (Wales) and GB-NIR (Northern Ireland). The groups are GB (the United Kingdom: all four nations) and GB-GBN (Great Britain: England, Scotland and Wales). Write GB, not UK. A riddle counts for a group only if it counts in every place of that group. Leave places out and the riddle counts everywhere.",
+  "victim: true or false, whether the riddle may name the victim. Left out, it is true.",
+  "level: easy, medium or hard. Left out, it is easy.",
+  "keep_off: a list of first names that must not be on a board where the riddle is used. A name from this table that the riddle prints, starting with a capital, is kept off by itself; list only the names the table lacks.",
+  "who: a note for people on who the riddle means."
  ],
 
  "Michael": ["the singer of Thriller", "the masked killer from the Halloween movies"],

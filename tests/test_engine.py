@@ -1533,6 +1533,18 @@ class RiddleRecords(unittest.TestCase):
         self.assertEqual(table, as_given)
         self.assertEqual(wording.riddles_for({"Bob": [us]}, "GB-NIR"), {})
 
+    def test_the_riddle_table_describes_the_object_form(self):
+        path = Path(wording.__file__).with_name("riddles.json")
+        notes = " ".join(json.loads(path.read_text(encoding="utf-8"))["_rules"])
+        for field in wording.FIELDS:
+            self.assertRegex(notes, rf"\b{field}\b", field)
+        for code in sorted(wording.PLACES | wording.GROUPS.keys()):
+            self.assertRegex(notes, rf"(?<![\w-]){code}(?![\w-])", code)
+        for level in wording.LEVELS:
+            self.assertRegex(notes, rf"\b{level}\b", level)
+        self.assertIn("kept off by itself", notes)
+        self.assertIn("not UK", notes)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
