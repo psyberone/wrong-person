@@ -150,6 +150,12 @@ fills in and keeps off by itself, and for what counts for a place. E285 and
 E286 are two that `mutmut` made first and that no test caught until a case was
 added for each. E074 and E077 were written again for the same change: the words
 they replace came to stand in two places.
+
+E287 and on came from the review of that change, and carry the tag `u9r`.
+The five AI reviewers found behaviour of the change that no test held, and a
+fault in how a riddle object was read. The AI coding assistant planted these
+against its own fixes: one for each case added to a test, and one for each
+check the fixes brought.
 """
 
 E, W, R, J, T = ("src/wrong_person/engine.py", "src/wrong_person/wording.py", "README.md",
@@ -1128,4 +1134,24 @@ FAULTS = [
     ("E286 [u9] a name to keep off that is not text stops the check of the names after it",
      RR + "test_a_bad_keep_off_is_refused",
      [(W, 'which {_NAME_RULE}")\n                    continue\n', 'which {_NAME_RULE}")\n                    break\n')]),
+    # ---- the review of work unit 9
+    ("E287 [u9r] a written name is compared with its accents on, so a name written with its accent and printed without it is kept off twice",
+     RR + "test_written_names_come_first_and_each_name_once",
+     [(W, 'held = {_plain(name).lower() for name in keep_off}', 'held = {name.lower() for name in keep_off}')]),
+    ("E288 [u9r] riddles_for hands back the table's own list where every riddle counts",
+     RR + "test_only_the_riddles_for_a_place_are_kept",
+     [(W, 'return {name: riddles for name, riddles in kept.items() if riddles}',
+       'return {name: (table[name] if riddles == table[name] else riddles) for name, riddles in kept.items() if riddles}')]),
+    ("E289 [u9r] the own name written twice to keep off is also reported as listed twice",
+     RR + "test_a_bad_keep_off_is_refused",
+     [(W, '                elif plain.lower() in held:', '                if plain.lower() in held:')]),
+    ("E290 [u9r] a stray field's name is quoted raw, so a line break in it reaches the terminal",
+     RR + "test_what_the_new_messages_quote_is_escaped",
+     [(W, "has {field!r}, which", "has '{field}', which")]),
+    ("E291 [u9r] a name listed twice in keep_off is quoted raw",
+     RR + "test_what_the_new_messages_quote_is_escaped",
+     [(W, ': {kept!r} is listed twice', ": '{kept}' is listed twice")]),
+    ("E292 [u9r] the riddle quoted in a field's message is not escaped",
+     RR + "test_what_the_new_messages_quote_is_escaped",
+     [(W, 'quoted = repr(entry if line is None else line)', 'quoted = str(entry if line is None else line)')]),
 ]

@@ -1356,6 +1356,8 @@ class RiddleRecords(unittest.TestCase):
                                                      f"Homer: {self.DOH!r}: keep_off holds None, which {rule}"])
         for own in ("Homer", "Hom\u00e8r", "Home\u0300r"):
             self.assertEqual(check([own]), [f"Homer: {self.DOH!r}: keep_off holds the riddle's own name"], ascii(own))
+        # the own name written twice is the own name each time, and not also listed twice
+        self.assertEqual(check(["Homer", "Homer"]), [f"Homer: {self.DOH!r}: keep_off holds the riddle's own name"] * 2)
         self.assertEqual(check(["Zo\u00eb", "Marge", "Zoe"]), [f"Homer: {self.DOH!r}: 'Zoe' is listed twice in keep_off"])
         self.assertEqual(check(["McCoy", "Mccoy"]), [f"Homer: {self.DOH!r}: 'Mccoy' is listed twice in keep_off"])
         self.assertEqual(check(["Marge", "Mona", "Zo\u00eb", "McCoy"]), [])
@@ -1383,6 +1385,27 @@ class RiddleRecords(unittest.TestCase):
                           f"Tom: {text!r}: who must be text, got 5",
                           f"Tom: {text!r} should have no outer spaces or full stop",
                           f"Tom: {text!r} gives the name away"])
+
+    def test_what_the_new_messages_quote_is_escaped(self):
+        # a line break, an escape, a line a workflow log would read as its own, and a right-to-left override
+        odd = "a\nb\x1b[31m\n##[error]x\u202e"
+        cases = [{"riddle": self.CAT, odd: 1},                     # a stray field's name
+                 {odd: 1},                                          # an object with no riddle
+                 {"riddle": self.CAT, "places": [odd]},
+                 {"riddle": self.CAT, "victim": odd},
+                 {"riddle": self.CAT, "level": odd},
+                 {"riddle": self.CAT, "who": [odd]},
+                 {"riddle": self.CAT, "keep_off": [odd]},
+                 {"riddle": self.CAT, "keep_off": [odd, odd]},      # bad, and listed twice
+                 {"riddle": odd, "level": "x"}]                     # the riddle quoted in a field's message
+        for entry in cases:
+            problems = self.check_one("Tom", entry)
+            self.assertTrue(problems, ascii(entry))
+            for problem in problems:
+                self.assertTrue(problem.isprintable(), ascii(problem))
+            self.assertTrue(any(repr(odd) in problem for problem in problems), ascii(entry))
+        twice = self.check_one("Tom", {"riddle": self.CAT, "keep_off": [odd, odd]})
+        self.assertIn(f"Tom: {self.CAT!r}: {odd!r} is listed twice in keep_off", twice)
 
     def test_a_plain_line_and_an_object_with_the_same_text_are_listed_twice(self):
         check = wording.check_riddles
@@ -1446,6 +1469,10 @@ class RiddleRecords(unittest.TestCase):
         table = self.load({"Tom": [{"riddle": "the twin of Zo\u00eb", "keep_off": ["Zoe"]}],
                            "Zo\u00eb": ["the heroine of a French novel"]})
         self.assertEqual(table["Tom"][0].keep_off, ("Zoe",))
+        # and the other way round: written with its accent, printed without
+        table = self.load({"Tom": [{"riddle": "the twin of Zoe", "keep_off": ["Zo\u00eb"]}],
+                           "Zo\u00eb": ["the heroine of a French novel"]})
+        self.assertEqual(table["Tom"][0].keep_off, ("Zo\u00eb",))
 
     def test_a_printed_name_is_found_whatever_its_case_or_accents(self):
         lines = ["ZOE's twin", "Zo\u00eb's twin brother", "Zoe\u0308's twin sister", "Zoe's twin cousin", "the twin of ZO\u00cb"]
@@ -1541,6 +1568,11 @@ class RiddleRecords(unittest.TestCase):
         self.assertEqual(wording.riddles_for({}, "US"), {})
         kept = wording.riddles_for(table, "US")
         kept["Ann"].append(gb)
+        self.assertEqual(table, as_given)
+        # a list where every riddle counts is a new list too, not the table's own
+        kept = wording.riddles_for(table, "US")
+        self.assertIsNot(kept["Tom"], table["Tom"])
+        kept["Tom"].append(gb)
         self.assertEqual(table, as_given)
         self.assertEqual(wording.riddles_for({"Bob": [us]}, "GB-NIR"), {})
 
