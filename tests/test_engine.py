@@ -1461,6 +1461,19 @@ class RiddleRecords(unittest.TestCase):
         # with no riddle to quote, the object is quoted, as in the other messages; it comes after what the check finds
         self.assertEqual(self.refusal('{"Tom": [{"riddle": 5, "victim": true, "victim": false}]}'),
                          "mine.json: Tom: 5 is not a riddle; Tom: {'riddle': 5, 'victim': False} has 'victim' more than once")
+        # a repeat is found under any name, not only the first
+        self.assertEqual(self.refusal('{"Ann": ["the dog"], "Tom": [{"riddle": %s, "victim": false, "victim": true}]}' % cat),
+                         f"mine.json: Tom: {self.CAT!r} has 'victim' more than once")
+        # a name that holds no list is refused by the check, naming the file, and not looked into for repeats
+        self.assertEqual(self.refusal('{"Ann": 5, "Tom": [{"riddle": %s}]}' % cat), "mine.json: Ann needs a list with at least one riddle")
+        # what the message quotes is escaped: written in the file as \u escapes, a line break, an escape, a line a
+        # workflow log would read as its own, and a right-to-left override
+        odd = "\\n\\u001b[31m\\n##[error]x\\u202e"
+        message = self.refusal('{"Tom": [{"riddle": "the cat%s", "x%s": 1, "x%s": 2}]}' % (odd, odd, odd))
+        riddle, field = json.loads('"the cat%s"' % odd), json.loads('"x%s"' % odd)
+        self.assertTrue(message.startswith("mine.json: "), ascii(message))
+        self.assertIn(f"Tom: {riddle!r} has {field!r} more than once", message)
+        self.assertTrue(message.isprintable(), ascii(message))
         # a note may still repeat a key, inside an object or not
         table = self.load_text('{"_rules": [{"a": 1, "a": 2}], "_x": {"b": 1, "b": 2}, "Tom": [{"riddle": %s}]}' % cat)
         self.assertEqual(table, {"Tom": [wording.Riddle(self.CAT)]})
@@ -1537,6 +1550,10 @@ class RiddleRecords(unittest.TestCase):
         # U+0221 is a letter since Unicode 4.0, so every Python's own tables would join it to the name
         table = self.load({"Homer": ["Bart\u0221 Simpson's father"], "Bart": ["the boy with the slingshot"]})
         self.assertEqual(table["Homer"][0].keep_off, ("Bart",))
+        # a digit ends a word; a modifier letter (U+02B0) or a letter with no case (U+05D0) is part of one
+        table = self.load({"Homer": ["Bart2 Simpson's father", "Bart\u02b0 Simpson's father", "Bart\u05d0 Simpson's father"],
+                           "Bart": ["the boy with the slingshot"]})
+        self.assertEqual([riddle.keep_off for riddle in table["Homer"]], [("Bart",), (), ()])
         # a capital with its accent on starts a printed name, and one in small letters does not
         table = self.load({"Tom": ["\u00c9mile's twin", "the twin of \u00e9mile"], "\u00c9mile": ["the boy in the book"]})
         self.assertEqual([riddle.keep_off for riddle in table["Tom"]], [("\u00c9mile",), ()])

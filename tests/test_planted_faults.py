@@ -987,7 +987,7 @@ class TheLists(unittest.TestCase):
     def test_each_list_holds_as_many_faults_as_it_did(self):
         """To add a fault, or to retire one, change its list's number here in the same pull request."""
         held = {path.name: len(runpy.run_path(str(path))["FAULTS"]) for path in sorted((ROOT / "tools" / "faults").glob("*.py"))}
-        self.assertEqual(held, {"checks.py": 320, "package.py": 297, "runner.py": 149})
+        self.assertEqual(held, {"checks.py": 320, "package.py": 303, "runner.py": 149})
 
 
 class RunAsAProgram(SmallRepository):
